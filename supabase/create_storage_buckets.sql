@@ -1,3 +1,11 @@
+-- SUPERSEDED by supabase/storage_setup.sql. DO NOT RUN.
+--
+-- Kept for history only. The policies below are named as if they check
+-- ownership but only check bucket_id, so re-running this file would let any
+-- signed-in user delete or overwrite any other user's photos - RLS policies are
+-- OR'd together, so these override the folder scoping in storage_setup.sql.
+-- Use storage_setup.sql instead; it drops these and creates correct ones.
+
 -- Create the storage buckets the app uploads to.
 -- Run this in the Supabase SQL editor (Database -> SQL editor -> New query).
 

@@ -44,6 +44,14 @@ yarn-error.*
 # Supabase CLI local state
 supabase/.temp/
 
+# Production schema dumps written by scripts/clone-schema-to-dev.ps1. This
+# repository is public, and the dump reproduces every function body and RLS
+# expression in production. The script redacts the webhook trigger that carries
+# credentials and aborts on any JWT-shaped string, but that guard only knows the
+# shapes of today's secrets, and the file is regenerated on every clone.
+# Regenerate it locally with -DumpOnly whenever it is needed.
+supabase/migrations/*_baseline_public.sql
+
 # Destructive one-shot scripts that have already been executed against production.
 # The safe, guarded copy lives in supabase/_archive/. If an editor ever recreates
 # the original at the path below (e.g. from a stale buffer), this rule ensures it

@@ -11,6 +11,12 @@
       "ios": { "simulator": true },
       "android": { "buildType": "apk" }
     },
+    "development-device": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "android": { "buildType": "apk" }
+    },
     "preview": {
       "distribution": "internal",
       "environment": "preview",
@@ -24,6 +30,7 @@
     },
     "beta": {
       "extends": "production",
+      "environment": "preview",
       "channel": "beta"
     }
   },

@@ -1,3 +1,10 @@
+-- SUPERSEDED by supabase/storage_setup.sql. Kept for history only.
+--
+-- The policies here are correct, but this file drops only its own policy names,
+-- so it left the permissive ones from create_storage_buckets.sql in place and
+-- they defeated this folder scoping. storage_setup.sql carries the same policies
+-- and clears every policy touching the bucket first.
+
 -- Storage RLS for bucket `sighting-photos` (create bucket in Dashboard if needed:
 -- Storage → New bucket → name: sighting-photos → Public bucket ON if you use getPublicUrl).
 --

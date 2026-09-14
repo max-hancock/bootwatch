@@ -1,3 +1,12 @@
+-- PARTIALLY SUPERSEDED: everything below touching Storage (the `avatars` bucket
+-- config and its storage.objects policies) now lives in
+-- supabase/storage_setup.sql. The profiles.avatar_url column added here is not
+-- superseded, and is part of the schema baseline.
+--
+-- Same problem as storage_sighting_photos_policies.sql: this file drops only its
+-- own policy names, so the permissive avatar update/delete policies from
+-- create_storage_buckets.sql survived alongside it.
+
 -- Run in Supabase SQL Editor.
 -- Adds optional profile photos. Image bytes live in a public Storage bucket
 -- named `avatars`; the public URL is stored on profiles.avatar_url.

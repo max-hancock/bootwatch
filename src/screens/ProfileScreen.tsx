@@ -71,7 +71,7 @@ const ALLOWED_AVATAR_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'gif'] as con
 type AllowedAvatarExt = (typeof ALLOWED_AVATAR_EXTS)[number];
 
 // 2 MB client-side cap. Matches the bucket-level limit in
-// `supabase/add_profile_avatar.sql`; we check both so users get a friendly
+// `supabase/storage_setup.sql`; we check both so users get a friendly
 // message before the upload round-trip and the server still rejects if the
 // client check is bypassed.
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
