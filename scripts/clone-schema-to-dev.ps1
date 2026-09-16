@@ -1,9 +1,28 @@
 <#
-Clones the PRODUCTION schema into a DEV Supabase project - structure only, no rows.
+Clones the PRODUCTION schema into a DEV Supabase project, plus the subset of rows
+that make dev worth testing against.
 
-Deliberately does NOT copy data: dev does not need 200 students' accounts,
-reports, or push tokens, and duplicating them into a second project would widen
-the blast radius of a leak for no benefit.
+Copies:
+  complexes                    verbatim. Campus reference data - names, real
+                               coordinates, visitor limits, risk levels. No
+                               personal data and no foreign key into auth.
+  banned_display_name_patterns verbatim. Moderation config, needed to test
+                               display-name validation.
+  sightings                    with user_id and photo_url nulled. Real
+                               coordinates, timestamps, report types and
+                               per-complex distribution, so anything built on
+                               aggregates has true patterns to render instead of
+                               invented ones that always look plausible.
+
+Never copies: profiles, push_tokens, active_timers, or anything in auth. Those
+are 200 students' accounts.
+
+push_tokens is the one to never relax. Dev's notify-sighting reads that table,
+so a copy of it means every test report fires a real notification at a real
+student's phone - the exact failure a separate dev database exists to prevent.
+
+All four also have foreign keys into auth.users, so restoring them would mean
+copying real email addresses and password hashes into a second project too.
 
 Connection strings are read from environment variables so they never land in
 git or in a chat transcript. Get each from the project's "Connect" button in the
@@ -27,10 +46,12 @@ into dev. Use -KeepDevData to skip it, at the cost of the clone no longer pickin
 up changes to objects dev already has.
 
 Usage:
-  .\scripts\clone-schema-to-dev.ps1              # dump prod, reset dev, apply, verify
+  .\scripts\clone-schema-to-dev.ps1              # dump prod, reset dev, apply, copy data, verify
   .\scripts\clone-schema-to-dev.ps1 -DumpOnly    # write the baseline file, touch nothing
   .\scripts\clone-schema-to-dev.ps1 -VerifyOnly  # compare prod vs dev structure
   .\scripts\clone-schema-to-dev.ps1 -KeepDevData # keep dev's rows; see caveat above
+  .\scripts\clone-schema-to-dev.ps1 -DataOnly    # refresh the copied rows, leave schema alone
+  .\scripts\clone-schema-to-dev.ps1 -SkipData    # schema only, copy no rows
 
 ASCII only on purpose: PowerShell 5.1 reads .ps1 as ANSI, so non-ASCII
 punctuation here breaks parsing.
@@ -41,7 +62,9 @@ param(
   [string]$DevDbUrl = $env:DEV_DB_URL,
   [switch]$DumpOnly,
   [switch]$VerifyOnly,
-  [switch]$KeepDevData
+  [switch]$KeepDevData,
+  [switch]$DataOnly,
+  [switch]$SkipData
 )
 
 $ErrorActionPreference = 'Stop'
@@ -183,6 +206,111 @@ union all select 'realtime tables', count(*)::text from pg_publication_tables
 order by kind;
 "@
 
+# The only tables copied out of production, and exactly what is taken from each.
+#
+# Every Select here is read against production, so treat this list as the answer
+# to "what personal data has left the production project". Adding a table means
+# widening that answer - profiles, push_tokens and active_timers are absent on
+# purpose, see the note at the top of this file.
+#
+# Order matters. complexes is first because the truncate below cascades from it
+# to sightings and active_timers.
+$DataCopySteps = @(
+  @{
+    Label   = 'complexes'
+    Table   = 'public.complexes'
+    Columns = 'id, name, address, latitude, longitude, visitor_time_limit_minutes, booting_company, signage_quality, risk_level, notes, created_at'
+    Select  = 'select id, name, address, latitude, longitude, visitor_time_limit_minutes, booting_company, signage_quality, risk_level, notes, created_at from public.complexes'
+    Reset   = $null
+  },
+  @{
+    Label   = 'banned_display_name_patterns'
+    Table   = 'public.banned_display_name_patterns'
+    Columns = 'id, pattern, kind, reason, created_at'
+    Select  = 'select id, pattern, kind, reason, created_at from public.banned_display_name_patterns'
+    # id is a plain serial and the ids are copied verbatim, so the sequence is
+    # left at 1 and the next insert in dev would collide with an existing row.
+    Reset   = "select setval(pg_get_serial_sequence('public.banned_display_name_patterns', 'id'), coalesce((select max(id) from public.banned_display_name_patterns), 1));"
+  },
+  @{
+    Label   = 'sightings (anonymized)'
+    Table   = 'public.sightings'
+    Columns = 'id, user_id, complex_id, latitude, longitude, photo_url, created_at, report_type, is_anonymous'
+    # user_id nulled: the column is nullable (ON DELETE SET NULL) and dev's
+    # auth.users does not contain these people, so a verbatim copy would be
+    # rejected by the foreign key even if it were wanted.
+    #
+    # photo_url nulled: the URLs point at production's storage bucket. Keeping
+    # them would have the dev app rendering real users' photos and attempting
+    # deletes against paths that do not exist in dev's bucket.
+    Select  = 'select id, null::uuid, complex_id, latitude, longitude, null::text, created_at, report_type, is_anonymous from public.sightings'
+    Reset   = $null
+  }
+)
+
+# Moves rows prod -> dev via CSV on disk. The transformation lives in each
+# Select, so nothing that is not wanted in dev is ever read out of production in
+# the first place.
+#
+# psql's \copy is a client-side meta-command, which is what lets one invocation
+# read from prod and the next write to dev without the server needing file
+# access. It is passed via -f rather than -c because the commands embed quoted
+# Windows paths that are painful to get through PowerShell's native-argument
+# handling intact.
+function Copy-ProdData([string]$ProdUrl, [string]$DevUrl) {
+  if ($DevUrl -match $ProdRef) {
+    throw "Copy-ProdData target points at PRODUCTION ($ProdRef). Aborting before any write."
+  }
+
+  $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ('bootwatch-clone-' + [guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+
+  try {
+    # One statement so the cascade is resolved once. This also clears
+    # active_timers and notify_sighting_dispatch, which reference these tables
+    # and hold only dev test rows.
+    $targets = ($DataCopySteps | ForEach-Object { $_.Table }) -join ', '
+    $wipe = Invoke-Psql $DevUrl @('--no-psqlrc', '-v', 'ON_ERROR_STOP=1') "truncate table $targets cascade;"
+    if ($wipe.ExitCode -ne 0) {
+      throw "could not clear dev tables before copy: $($wipe.Output -join ' ')"
+    }
+
+    foreach ($step in $DataCopySteps) {
+      $csv = (Join-Path $tmpDir ("{0}.csv" -f ($step.Label -replace '[^A-Za-z0-9_]', '_'))) -replace '\\', '/'
+      $sqlFile = Join-Path $tmpDir 'step.sql'
+
+      Set-Content -LiteralPath $sqlFile -Encoding ASCII `
+        -Value "\copy ($($step.Select)) to '$csv' with (format csv)"
+      $r = Invoke-Psql $ProdUrl @('--no-psqlrc', '-v', 'ON_ERROR_STOP=1', '-f', $sqlFile)
+      if ($r.ExitCode -ne 0) {
+        throw "export of $($step.Label) from production failed: $($r.Output -join ' ')"
+      }
+
+      Set-Content -LiteralPath $sqlFile -Encoding ASCII `
+        -Value "\copy $($step.Table) ($($step.Columns)) from '$csv' with (format csv)"
+      $r = Invoke-Psql $DevUrl @('--no-psqlrc', '-v', 'ON_ERROR_STOP=1', '-f', $sqlFile)
+      if ($r.ExitCode -ne 0) {
+        throw "import of $($step.Label) into dev failed: $($r.Output -join ' ')"
+      }
+
+      if ($step.Reset) {
+        $r = Invoke-Psql $DevUrl @('--no-psqlrc', '-v', 'ON_ERROR_STOP=1') $step.Reset
+        if ($r.ExitCode -ne 0) {
+          throw "sequence reset for $($step.Label) failed: $($r.Output -join ' ')"
+        }
+      }
+
+      $c = Invoke-Psql $DevUrl @('--no-psqlrc', '-t', '-A') "select count(*) from $($step.Table);"
+      $n = ($c.Output | Where-Object { $_ -match '^\d+$' } | Select-Object -First 1)
+      Write-Host ("  {0,-30} {1} row(s)" -f $step.Label, $n) -ForegroundColor Green
+    }
+  }
+  finally {
+    # The CSVs hold production rows; do not leave them in %TEMP%.
+    Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
+  }
+}
+
 function Assert-Tool([string]$Name) {
   if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
     throw "$Name not found on PATH. Installed via 'scoop install postgresql'; open a new shell, or prepend %USERPROFILE%\scoop\apps\postgresql\current\bin to PATH."
@@ -275,8 +403,21 @@ if (-not $DumpOnly) {
   }
 }
 
+if ($DataOnly -and $SkipData) {
+  throw '-DataOnly and -SkipData contradict each other.'
+}
+
 if ($VerifyOnly) {
   Show-Comparison (Get-Structure $ProdDbUrl) (Get-Structure $DevDbUrl)
+  return
+}
+
+# Refreshing rows without touching the schema. Safe to run often - it is how dev
+# picks up complexes added in production since the last full clone.
+if ($DataOnly) {
+  Write-Host 'Copying reference data and anonymized sightings from production...' -ForegroundColor Cyan
+  Copy-ProdData $ProdDbUrl $DevDbUrl
+  Write-Host 'Done. Schema was not touched.' -ForegroundColor Green
   return
 }
 
@@ -378,6 +519,15 @@ foreach ($step in $steps) {
   }
 }
 
+if ($SkipData) {
+  Write-Host 'SkipData set - dev has the schema but no rows.' -ForegroundColor Yellow
+}
+else {
+  Write-Host ''
+  Write-Host 'Copying reference data and anonymized sightings from production...' -ForegroundColor Cyan
+  Copy-ProdData $ProdDbUrl $DevDbUrl
+}
+
 Write-Host ''
 Write-Host 'Structure comparison:' -ForegroundColor Cyan
 Show-Comparison (Get-Structure $ProdDbUrl) (Get-Structure $DevDbUrl)
@@ -389,7 +539,5 @@ if ($errorCount -eq 0) {
 else {
   Write-Host "Done with $errorCount SQL error(s) above - review before trusting the clone." -ForegroundColor Yellow
 }
-Write-Host 'Still manual: deploy edge functions to dev, set their secrets, seed fake complexes.' -ForegroundColor Cyan
-if (-not $KeepDevData) {
-  Write-Host 'Dev public schema was rebuilt, so any seed data needs reseeding.' -ForegroundColor Cyan
-}
+Write-Host 'Still manual: deploy edge functions to dev, set their secrets, create dev''s webhook.' -ForegroundColor Cyan
+Write-Host 'No accounts were copied - sign up in the dev app to get a user to test as.' -ForegroundColor Cyan

@@ -1,6 +1,10 @@
 <#
-Copies the production database STRUCTURE into the bootwatch-dev project so you
-have a safe place to test. No user data is copied.
+Copies the production database structure into the bootwatch-dev project, along
+with the campus reference tables and an anonymized copy of sightings, so you
+have a safe place to test against realistic data.
+
+No accounts are copied. See the header of clone-schema-to-dev.ps1 for exactly
+which tables are taken and which are deliberately never taken.
 
 Run it and type the two database passwords when prompted. Nothing is stored:
 the passwords live in memory for this one run only.
@@ -8,6 +12,8 @@ the passwords live in memory for this one run only.
   .\scripts\setup-dev-db.ps1 -DumpOnly    # safe rehearsal, writes no database
   .\scripts\setup-dev-db.ps1              # do it for real
   .\scripts\setup-dev-db.ps1 -VerifyOnly  # just compare prod vs dev
+  .\scripts\setup-dev-db.ps1 -DataOnly    # refresh the copied rows, leave schema alone
+  .\scripts\setup-dev-db.ps1 -SkipData    # structure only, copy no rows
 
 Database passwords are NOT your Supabase login. Supabase will not show you an
 existing one - if you don't have it, reset it under
@@ -20,7 +26,9 @@ ASCII only on purpose: PowerShell 5.1 reads .ps1 as ANSI.
 [CmdletBinding()]
 param(
   [switch]$DumpOnly,
-  [switch]$VerifyOnly
+  [switch]$VerifyOnly,
+  [switch]$DataOnly,
+  [switch]$SkipData
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,9 +66,9 @@ if (-not (Get-Command pg_dump -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host ''
-Write-Host 'Copying production STRUCTURE into bootwatch-dev. No user data is copied.' -ForegroundColor Cyan
+Write-Host 'Copying production into bootwatch-dev. No accounts or push tokens are copied.' -ForegroundColor Cyan
 Write-Host "  production : $ProdRef  (read from, never written to)" -ForegroundColor Gray
-Write-Host "  dev        : $DevRef  (receives the schema)" -ForegroundColor Gray
+Write-Host "  dev        : $DevRef  (receives the schema and the copied rows)" -ForegroundColor Gray
 Write-Host ''
 Write-Host 'Find each password under Project -> Settings -> Database.' -ForegroundColor Gray
 Write-Host 'Typing is hidden.' -ForegroundColor Gray
@@ -80,7 +88,7 @@ if ($devPw) { $env:DEV_DB_URL = New-PoolerUrl $DevRef $devPw $DevPoolerHost }
 
 try {
   $clone = Join-Path $PSScriptRoot 'clone-schema-to-dev.ps1'
-  & $clone -DumpOnly:$DumpOnly -VerifyOnly:$VerifyOnly
+  & $clone -DumpOnly:$DumpOnly -VerifyOnly:$VerifyOnly -DataOnly:$DataOnly -SkipData:$SkipData
 }
 finally {
   # Do not leave credentials in the shell for later commands to inherit.
