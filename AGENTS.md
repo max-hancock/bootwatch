@@ -61,3 +61,14 @@ and a comment explaining why. Do not resurrect archived scripts.
 
 Do not commit directly to `main`. Promote `dev` → `main` only when cutting a
 release.
+
+## Before cutting a release
+
+- **App Store Connect URLs.** The GitHub account was renamed from
+  `MaximusHancockimus` to `max-hancock` (2026-09-16). The privacy policy and
+  support URLs in App Store Connect point at the public repo so users can read
+  `PRIVACY.md`. If either still uses the old username it is only working via
+  GitHub's rename redirect, which stops the moment anyone registers that
+  username and creates a repo called `bootwatch`. Confirm both point at
+  `github.com/max-hancock/bootwatch` before submitting. Remove this item once
+  verified.
