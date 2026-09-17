@@ -245,6 +245,14 @@ $DataCopySteps = @(
     # deletes against paths that do not exist in dev's bucket.
     Select  = 'select id, null::uuid, complex_id, latitude, longitude, null::text, created_at, report_type, is_anonymous from public.sightings'
     Reset   = $null
+    # Checked rather than assumed. A column reordered in the Select above would
+    # still copy cleanly and quietly put real user ids in dev - the failure would
+    # be invisible until someone went looking.
+    Assert  = @{
+      Query  = 'select count(*) from public.sightings where user_id is not null or photo_url is not null;'
+      Expect = '0'
+      Reason = 'sightings arrived in dev carrying user ids or production photo URLs'
+    }
   }
 )
 
@@ -303,6 +311,18 @@ function Copy-ProdData([string]$ProdUrl, [string]$DevUrl) {
       $c = Invoke-Psql $DevUrl @('--no-psqlrc', '-t', '-A') "select count(*) from $($step.Table);"
       $n = ($c.Output | Where-Object { $_ -match '^\d+$' } | Select-Object -First 1)
       Write-Host ("  {0,-30} {1} row(s)" -f $step.Label, $n) -ForegroundColor Green
+
+      if ($step.Assert) {
+        $a = Invoke-Psql $DevUrl @('--no-psqlrc', '-t', '-A') $step.Assert.Query
+        $got = ($a.Output | Where-Object { $_ -match '^\d+$' } | Select-Object -First 1)
+        if ($a.ExitCode -ne 0 -or $null -eq $got) {
+          throw "could not verify $($step.Label): $($a.Output -join ' ')"
+        }
+        if ($got -ne $step.Assert.Expect) {
+          throw "$($step.Assert.Reason) - expected $($step.Assert.Expect), got $got. Dev now holds data it should not; clear it before using dev."
+        }
+        Write-Host ("  {0,-30} verified: {1}" -f '', 'no user ids, no production photo URLs') -ForegroundColor DarkGray
+      }
     }
   }
   finally {
