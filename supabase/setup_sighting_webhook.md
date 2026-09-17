@@ -18,7 +18,12 @@ supabase functions deploy notify-sighting
 
 ## Step 2: Create the Database Webhook
 
-1. Go to **Database → Webhooks** in the Supabase Dashboard
+1. Go to **Integrations → Database Webhooks** in the Supabase Dashboard:
+   `/dashboard/project/<project-ref>/integrations/webhooks/overview`
+
+   Webhooks used to live under **Database → Webhooks**. That sidebar entry is
+   gone — old URLs still redirect, but there is nothing to click your way to
+   from the Database section any more.
 2. Click **Create a new webhook**
 3. Configure:
    - **Name**: `on-new-sighting`
@@ -26,13 +31,29 @@ supabase functions deploy notify-sighting
    - **Events**: `INSERT` only
    - **Type**: Supabase Edge Function
    - **Edge Function**: Select `notify-sighting`
-4. In **Edge Function → Settings** for `notify-sighting`, turn **off** “Verify JWT” (webhooks do not send a user session).
+4. Leave **“Verify JWT” on** for `notify-sighting`. Both projects run with
+   `verify_jwt = true`, and the webhook satisfies it by sending a service_role
+   key in the `Authorization` header — option **B** below. Turning it off also
+   works, but then dev stops behaving like production, which is the one thing a
+   dev project exists to prevent.
+
+   (Earlier revisions of this file said to turn it off. Production has always
+   run with it on; the instruction was wrong, not the setting.)
 5. **Webhook auth — the function must receive your key in one of these (see `getCallerCredential` in `index.ts`):**
    - **A)** `x-bootwatch-webhook-secret` = `NOTIFY_SIGHTING_WEBHOOK_SECRET` (Edge **Secrets**), or  
-   - **B)** `Authorization: Bearer <service_role>` (from **Settings → API**), or  
+   - **B)** `Authorization: Bearer <service_role>` (from **Settings → API Keys**;
+     there is no longer a separate Settings → API page), or  
    - **C)** `apikey: <service_role or anon key>` (same as many Supabase clients) — this is a common source of 401s if the Dashboard only set `apikey` and you weren’t reading it before.  
 
    The latest `notify-sighting` code accepts all of the above.
+
+   **Use each project's own key.** This webhook is a trigger in the project's own
+   database and the key is stored inside the trigger definition, so bootwatch-dev
+   must be given bootwatch-dev's service_role key. Pasting production's key into
+   dev would have dev's sightings authenticate against production — and
+   `pg_dump` reproduces trigger bodies verbatim, which is why
+   `scripts/clone-schema-to-dev.ps1` strips these triggers out of the baseline
+   rather than copying them between projects.
 6. **Save** the webhook, then add a new test sighting and check **Edge Functions → notify-sighting → Logs** for a line like `notify-sighting sighting=… parkedUserIds=… recipientTokens=…`
 
 ### Manual test (after one real sighting exists)
