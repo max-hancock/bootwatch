@@ -5,7 +5,10 @@ import * as Device from 'expo-device';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    // shouldShowAlert was split in SDK 53 into the banner and the notification
+    // centre list, which are now both required.
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -15,7 +18,7 @@ export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 
 export function useNotifications() {
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('undetermined');
-  const notificationListener = useRef<Notifications.EventSubscription>();
+  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
 
   useEffect(() => {
     checkPermissions();

@@ -50,7 +50,7 @@ export function formatParkingHoursSummary(complex: Complex): string {
   }
 
   const fr = complex.visitorFridayHours;
-  if (fr === null) {
+  if (!fr) {
     lines.push('Fri: Not listed on surveyed sign');
     return lines.join('\n');
   }

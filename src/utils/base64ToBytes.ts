@@ -24,5 +24,7 @@ export function base64ToUint8Array(input: string): Uint8Array {
 
 export function base64ToArrayBuffer(b64: string): ArrayBuffer {
   const u8 = base64ToUint8Array(b64);
-  return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+  const out = new ArrayBuffer(u8.byteLength);
+  new Uint8Array(out).set(u8);
+  return out;
 }

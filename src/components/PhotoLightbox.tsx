@@ -49,12 +49,13 @@ export default function PhotoLightbox({ imageUri, onClose }: Props) {
             accessibilityLabel="Close photo"
             accessibilityRole="button"
           />
-          <View style={styles.imageLayer} pointerEvents="box-none">
+          {/* none, not box-none: the layer holds only the image, and taps need to
+              reach the backdrop behind it to close the lightbox. */}
+          <View style={styles.imageLayer} pointerEvents="none">
             <Image
               source={{ uri: imageUri }}
               style={styles.image}
               resizeMode="contain"
-              pointerEvents="none"
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
             />
