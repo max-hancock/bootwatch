@@ -13,6 +13,7 @@ import ComplexDetailSheet from '../components/ComplexDetailSheet';
 import ReportSightingModal from '../components/ReportSightingModal';
 import { fontSize, fontWeight, spacing, borderRadius, shadowFloat, shadowCard, fonts } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { formatVisitorLimitMinutes } from '../utils/parkingDisplay';
 import { VISITOR_LIMIT_LEGEND, getVisitorLimitMarkerColor } from '../utils/visitorLimitColors';
 
@@ -28,6 +29,7 @@ type MapMode = 'complexes' | 'heatmap';
 
 export default function MapScreen() {
   const { colors } = useTheme();
+  const { show: showToast } = useToast();
   const [search, setSearch] = useState('');
   const [selectedComplex, setSelectedComplex] = useState<Complex | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -290,6 +292,10 @@ export default function MapScreen() {
         onSuccess={() => {
           refreshSightings();
           void refreshHeat(true);
+          showToast({
+            message: 'Thanks for the heads-up — others nearby will see it.',
+            icon: 'heart',
+          });
         }}
         initialComplexId={reportInitialComplexId}
       />

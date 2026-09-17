@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ParkingTimerProvider } from './src/context/ParkingTimerContext';
+import { ToastProvider } from './src/context/ToastContext';
 import { usePushToken } from './src/hooks/usePushToken';
 import TabNavigator from './src/navigation/TabNavigator';
 import AuthScreen from './src/screens/AuthScreen';
@@ -79,18 +80,20 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <AuthProvider>
-          <NavigationContainer
-            ref={navigationRef}
-            documentTitle={{
-              formatter: (options, route) =>
-                options?.title ?? route?.name ?? WEB_DOCUMENT_TITLE,
-            }}
-          >
-            <RootNavigator />
-            <ThemedStatusBar />
-          </NavigationContainer>
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <NavigationContainer
+              ref={navigationRef}
+              documentTitle={{
+                formatter: (options, route) =>
+                  options?.title ?? route?.name ?? WEB_DOCUMENT_TITLE,
+              }}
+            >
+              <RootNavigator />
+              <ThemedStatusBar />
+            </NavigationContainer>
+          </AuthProvider>
+        </ToastProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

@@ -24,6 +24,7 @@ import { DEFAULT_AVATAR_COLOR } from '../utils/avatarColors';
 import { fontSize, spacing, borderRadius, shadowCard } from '../theme';
 import { fonts } from '../theme/fonts';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 
 const BOOTWATCH_EMPTY = require('../../assets/android-icon-monochrome.png');
 
@@ -56,6 +57,7 @@ function PulseBadge({
 
 export default function FeedScreen() {
   const { colors } = useTheme();
+  const { show: showToast } = useToast();
   const styles = createStyles(colors);
   const { sightings, loading, error, refresh, deleteSighting } = useSightings();
   const { user } = useAuth();
@@ -187,7 +189,17 @@ export default function FeedScreen() {
         <Ionicons name="add" size={28} color={colors.textInverse} />
       </Pressable>
 
-      <ReportSightingModal visible={reportVisible} onClose={() => setReportVisible(false)} onSuccess={refresh} />
+      <ReportSightingModal
+        visible={reportVisible}
+        onClose={() => setReportVisible(false)}
+        onSuccess={() => {
+          refresh();
+          showToast({
+            message: 'Thanks for the heads-up — others nearby will see it.',
+            icon: 'heart',
+          });
+        }}
+      />
       <PhotoLightbox imageUri={lightboxUri} onClose={closeLightbox} />
       </View>
     </ScreenGradientBackdrop>
