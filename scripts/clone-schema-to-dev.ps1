@@ -203,6 +203,14 @@ union all select 'storage policies unscoped', count(*)::text from pg_policies
     and coalesce(qual, '') || ' ' || coalesce(with_check, '') not like '%foldername%'
 union all select 'realtime tables', count(*)::text from pg_publication_tables
   where pubname = 'supabase_realtime' and schemaname = 'public'
+-- Database Webhooks are not schema you can clone: enabling them installs the
+-- supabase_functions schema and its http_request(), and that only happens when
+-- someone turns the integration on in the dashboard for that specific project.
+-- A project without it cannot have a webhook created at all - the dashboard
+-- fails with 'schema "supabase_functions" does not exist'. Counted here so the
+-- difference shows up in this table instead of at the moment you need it.
+union all select 'webhooks enabled', count(*)::text from information_schema.schemata
+  where schema_name = 'supabase_functions'
 order by kind;
 "@
 
