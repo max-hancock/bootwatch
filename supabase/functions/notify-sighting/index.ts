@@ -1,8 +1,12 @@
 // Supabase Edge Function: notify-sighting
 // Triggered by: (1) Database Webhook on INSERT into sightings, or (2) app calling
 // supabase.functions.invoke('notify-sighting', …) with the reporter's access token.
-// Auth: service role / anon / NOTIFY_SIGHTING_WEBHOOK_SECRET (see getCallerCredential), OR
-//   a valid user JWT for the same user as sighting.user_id (reporter only).
+// Auth: service role JWT for this project / anon / NOTIFY_SIGHTING_WEBHOOK_SECRET
+//   (see getCallerCredential), OR a valid user JWT for the same user as
+//   sighting.user_id (reporter only). The service_role JWT is accepted by
+//   payload (role + ref), not only by exact match against the injected
+//   SUPABASE_SERVICE_ROLE_KEY - newer projects inject sb_secret_... there.
+//   That path assumes Edge Function "Verify JWT" stays ON.
 // Optional table public.notify_sighting_dispatch dedupes webhook + app (run add script in repo).
 // Dashboard: JWT verification can be ON (user invoke) or OFF (webhook-only) — with OFF, both work.
 
@@ -47,6 +51,43 @@ function getCallerCredential(req: Request): string {
   return a;
 }
 
+function projectRefFromSupabaseUrl(): string {
+  const raw = Deno.env.get("SUPABASE_URL")?.trim() ?? "";
+  try {
+    return new URL(raw).hostname.split(".")[0] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Decode a JWT payload without verifying the signature. Safe only because
+ *  Edge Function "Verify JWT" already rejected tokens this project did not
+ *  sign. Do not turn Verify JWT off without replacing this with a signature
+ *  check. */
+function jwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[1]) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+    const json = atob(b64 + pad);
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function isThisProjectsServiceRoleJwt(cred: string): boolean {
+  const payload = jwtPayload(cred);
+  if (!payload) return false;
+  const expected = projectRefFromSupabaseUrl();
+  return payload.role === "service_role" &&
+    typeof payload.ref === "string" &&
+    expected.length > 0 &&
+    payload.ref === expected;
+}
+
 function verifyStaticCredentials(cred: string): boolean {
   const notify = Deno.env.get("NOTIFY_SIGHTING_WEBHOOK_SECRET")?.trim() ?? "";
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() ?? "";
@@ -55,6 +96,11 @@ function verifyStaticCredentials(cred: string): boolean {
   if (serviceRole && timingSafeEqual(cred, serviceRole)) return true;
   if (notify.length > 0 && notify.length < 16 && timingSafeEqual(cred, notify)) return true;
   if (anon && timingSafeEqual(cred, anon)) return true;
+  // Newer Supabase projects inject sb_secret_... as SUPABASE_SERVICE_ROLE_KEY
+  // while the dashboard still copies the legacy JWT into webhook headers.
+  // Exact string match then 401s a perfectly valid service_role JWT. Accept
+  // one whose ref claim is this project; Verify JWT already checked the signature.
+  if (isThisProjectsServiceRoleJwt(cred)) return true;
   return false;
 }
 

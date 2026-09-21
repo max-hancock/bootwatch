@@ -47,6 +47,15 @@ supabase functions deploy notify-sighting
 
    The latest `notify-sighting` code accepts all of the above.
 
+   Option **B** used to require the header string to match the key injected
+   into the function as `SUPABASE_SERVICE_ROLE_KEY`. On newer projects those
+   are no longer the same value: the dashboard still copies a legacy JWT, and
+   the function is given an `sb_secret_...` key. A webhook configured exactly
+   as production is then 401s from the function *after* platform Verify JWT
+   has already accepted the token. The function now accepts a JWT whose
+   payload `role` is `service_role` and whose `ref` is this project. Leave
+   Verify JWT **on** — that is what makes reading the payload safe.
+
    **Use each project's own key.** This webhook is a trigger in the project's own
    database and the key is stored inside the trigger definition, so bootwatch-dev
    must be given bootwatch-dev's service_role key. Pasting production's key into
