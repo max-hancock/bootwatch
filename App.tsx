@@ -4,6 +4,7 @@ import Constants from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Platform, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -78,24 +79,26 @@ export default function App() {
   }, []);
 
   return (
-    <ErrorBoundary>
-      <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <NavigationContainer
-              ref={navigationRef}
-              documentTitle={{
-                formatter: (options, route) =>
-                  options?.title ?? route?.name ?? WEB_DOCUMENT_TITLE,
-              }}
-            >
-              <RootNavigator />
-              <ThemedStatusBar />
-            </NavigationContainer>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <NavigationContainer
+                ref={navigationRef}
+                documentTitle={{
+                  formatter: (options, route) =>
+                    options?.title ?? route?.name ?? WEB_DOCUMENT_TITLE,
+                }}
+              >
+                <RootNavigator />
+                <ThemedStatusBar />
+              </NavigationContainer>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }
 
