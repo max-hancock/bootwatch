@@ -72,3 +72,21 @@ release.
   username and creates a repo called `bootwatch`. Confirm both point at
   `github.com/max-hancock/bootwatch` before submitting. Remove this item once
   verified.
+- **"People alerted" count vs the sightings database webhook.** The
+  post-report celebration (`src/components/ReportCelebration.tsx`) shows "N
+  people nearby were just alerted" using the `sent` value returned when the app
+  invokes `notify-sighting`. If the production database webhook on `sightings`
+  is enabled (see `supabase/setup_sighting_webhook.md`), it can dispatch first;
+  the app's call is then deduped and returns `{ skipped: true }` with no count,
+  so the line silently never appears. Before shipping the celebration, check
+  whether that webhook is on in production. If it is, change `notify-sighting`
+  to store the recipient count in `notify_sighting_dispatch` and return it on
+  the skipped path too. Remove this item once resolved.
+- **Onboarding is out of date.** `src/screens/OnboardingScreen.tsx` still
+  describes the app as three tools (map, timer, feed). Before shipping, update
+  its slides to cover what has been added since: the Ranks tab (points, monthly
+  and all-time leaderboards, profile cards), reactions on reports (Thanks, Saw
+  it too, emoji), and any later community features (e.g. thanks notifications,
+  sharing, comments) that are in the release. Existing users never see
+  onboarding again, so consider a one-time "What's new" screen for them too.
+  Remove this item once the slides match the shipped feature set.
