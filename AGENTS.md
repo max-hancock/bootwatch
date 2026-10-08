@@ -82,14 +82,16 @@ release.
   whether that webhook is on in production. If it is, change `notify-sighting`
   to store the recipient count in `notify_sighting_dispatch` and return it on
   the skipped path too. Remove this item once resolved.
-- **Onboarding is out of date.** `src/screens/OnboardingScreen.tsx` still
-  describes the app as three tools (map, timer, feed). Before shipping, update
-  its slides to cover what has been added since: the Ranks tab (points, monthly
-  and all-time leaderboards, profile cards), reactions on reports (Thanks, Saw
-  it too, emoji), and any later community features (e.g. thanks notifications,
-  sharing, comments) that are in the release. Existing users never see
-  onboarding again, so consider a one-time "What's new" screen for them too.
-  Remove this item once the slides match the shipped feature set.
+- **Keep onboarding in step with the release.**
+  `src/screens/OnboardingScreen.tsx` was updated on 2026-10-08 to cover
+  reactions, points, the Ranks tab, reaction notifications and the timer's
+  nearest-complex and boot-time features. Two things remain:
+  - If more community features ship in the same release (e.g. sharing,
+    comments), update the "Ranks & Reactions" box on the "How It Works" slide
+    to match.
+  - Existing users never see onboarding again. Decide whether to add a one-time
+    "What's new" screen so they learn about Ranks and reactions.
+  Remove this item once both are settled.
 - **Location permission wording (needs a new App Store build).** The Timer tab
   now uses GPS to list the nearest complexes
   (`src/hooks/useNearestComplexes.ts`). The iOS permission text in `app.json`

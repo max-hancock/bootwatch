@@ -35,22 +35,27 @@ function getSlides(colors: AppColors): Slide[] {
       icon: 'bulb-outline',
       iconColor: colors.primary,
       title: 'How It Works',
-      subtitle: 'Three tools built to keep your car safe:',
+      subtitle: 'Four tools built to keep your car safe:',
       features: [
         {
           icon: 'flame',
           label: 'Risk Heatmap',
-          desc: 'A live, color-coded map of every Rexburg complex — visitor time limits, booting companies, and hotspots of recent boot activity at a glance.',
+          desc: 'A live map of every Rexburg complex: visitor limits, booting companies, and recent boot activity.',
         },
         {
           icon: 'timer',
           label: 'Smart Parking Timer',
-          desc: 'Auto-tuned to each complex\u2019s visitor limit with alerts that warn you before time runs out, so you never come back to a boot.',
+          desc: 'Finds the complexes nearest you, counts down the visitor limit, and warns you before time runs out.',
         },
         {
           icon: 'analytics',
-          label: 'Community Intel',
-          desc: 'Real-time sightings from fellow students plus data insights on peak booter hours and trending high-risk complexes.',
+          label: 'Community Feed',
+          desc: 'Real-time sightings from fellow students, with alerts when a booter is reported near you.',
+        },
+        {
+          icon: 'trophy',
+          label: 'Ranks & Reactions',
+          desc: 'Earn points for every report, get thanked by people you helped, and climb the leaderboard.',
         },
       ],
     },
@@ -60,7 +65,7 @@ function getSlides(colors: AppColors): Slide[] {
       iconColor: colors.safe,
       title: 'Stronger Together',
       subtitle:
-        'Report sightings, follow your complex, and help fellow students avoid getting booted. Your reports are anonymous if you want them to be.',
+        'Report sightings, follow your complex, and help fellow students avoid getting booted. You can always post anonymously.',
     },
   ];
 }
@@ -73,6 +78,9 @@ export default function OnboardingScreen({ onComplete }: Props) {
   const { colors } = useTheme();
   const slides = useMemo(() => getSlides(colors), [colors]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // A horizontal list doesn't give its items a height, so without this a tall slide
+  // is clipped at the bottom instead of scrolling.
+  const [slideHeight, setSlideHeight] = useState<number | undefined>(undefined);
   const flatListRef = useRef<FlatList>(null);
   const styles = createStyles(colors);
 
@@ -99,8 +107,8 @@ export default function OnboardingScreen({ onComplete }: Props) {
   function renderSlide({ item }: { item: Slide }) {
     return (
       <ScrollView
-        style={styles.slideScroll}
-        contentContainerStyle={styles.slide}
+        style={[styles.slideScroll, slideHeight !== undefined && { height: slideHeight }]}
+        contentContainerStyle={[styles.slide, item.features && styles.slideCompact]}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
@@ -112,9 +120,12 @@ export default function OnboardingScreen({ onComplete }: Props) {
             accessibilityLabel="BootWatch"
           />
         ) : (
-          <View style={[styles.iconCircle, { backgroundColor: item.iconColor + '22' }]}>
-            <Ionicons name={item.icon} size={56} color={item.iconColor} />
-          </View>
+          // The feature slide skips the big icon so all of its boxes fit on one screen.
+          !item.features && (
+            <View style={[styles.iconCircle, { backgroundColor: item.iconColor + '22' }]}>
+              <Ionicons name={item.icon} size={56} color={item.iconColor} />
+            </View>
+          )
         )}
         <Text style={styles.slideTitle}>{item.title}</Text>
         <Text style={styles.slideSubtitle}>{item.subtitle}</Text>
@@ -150,6 +161,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
+        onLayout={(e) => setSlideHeight(e.nativeEvent.layout.height)}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
         getItemLayout={getItemLayout}
@@ -194,6 +206,9 @@ function createStyles(colors: AppColors) {
       paddingHorizontal: spacing.xl,
       paddingVertical: spacing.xl,
     },
+    slideCompact: {
+      paddingVertical: spacing.md,
+    },
     brandIcon: {
       width: 150,
       height: 150,
@@ -222,8 +237,8 @@ function createStyles(colors: AppColors) {
       lineHeight: 22,
     },
     featureList: {
-      marginTop: spacing.xl,
-      gap: spacing.md,
+      marginTop: spacing.lg,
+      gap: spacing.sm,
       width: '100%',
     },
     featureRow: {
@@ -232,7 +247,8 @@ function createStyles(colors: AppColors) {
       gap: spacing.md,
       backgroundColor: colors.surface,
       borderRadius: borderRadius.lg,
-      padding: spacing.md,
+      paddingVertical: spacing.sm + 2,
+      paddingHorizontal: spacing.md,
       borderWidth: 1,
       borderColor: colors.border,
       ...shadowCard,
