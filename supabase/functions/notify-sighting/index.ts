@@ -2,8 +2,8 @@
 // Triggered by: (1) Database Webhook on INSERT into sightings, or (2) app calling
 // supabase.functions.invoke('notify-sighting', …) with the reporter's access token.
 // Auth: service role JWT for this project / anon / NOTIFY_SIGHTING_WEBHOOK_SECRET
-//   (see getCallerCredential), OR a valid user JWT for the same user as
-//   sighting.user_id (reporter only). The service_role JWT is accepted by
+//   (see getCallerCredential), OR a valid user JWT for the sighting's reporter
+//   (sighting_authors.user_id, falling back to sightings.user_id). The service_role JWT is accepted by
 //   payload (role + ref), not only by exact match against the injected
 //   SUPABASE_SERVICE_ROLE_KEY - newer projects inject sb_secret_... there.
 //   That path assumes Edge Function "Verify JWT" stays ON.
@@ -214,12 +214,31 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Who posted it. Anonymous sightings are stored with user_id = NULL (see
+    // supabase/2026-10-04_hide_anonymous_sighting_authors.sql), so the private
+    // sighting_authors table is the source of truth. sightings.user_id is the
+    // fallback for projects where that migration has not run yet.
+    let authorId: string | null = sighting.user_id;
+    const { data: authorRow, error: authorErr } = await supabase
+      .from("sighting_authors")
+      .select("user_id")
+      .eq("sighting_id", sighting.id)
+      .maybeSingle();
+    if (authorRow?.user_id) {
+      authorId = authorRow.user_id;
+    } else if (
+      authorErr &&
+      !/relation|does not exist|schema cache|sighting_authors/i.test(authorErr.message ?? "")
+    ) {
+      console.warn("[notify-sighting] sighting_authors lookup:", authorErr.message);
+    }
+
     if (reporterUserId !== null) {
-      if (sighting.user_id !== reporterUserId) {
+      if (authorId !== reporterUserId) {
         return new Response(
           JSON.stringify({
             error: "Forbidden",
-            detail: "User JWT must match the sighting reporter (sighting.user_id).",
+            detail: "User JWT must match the sighting reporter.",
           }),
           { status: 403, headers: { "Content-Type": "application/json" } },
         );
@@ -349,7 +368,7 @@ Deno.serve(async (req) => {
     for (const [id, tok] of followerTokens) allRecipients.set(id, tok);
     for (const [id, tok] of parkedTokenMap) allRecipients.set(id, tok);
 
-    if (sighting.user_id) allRecipients.delete(sighting.user_id);
+    if (authorId) allRecipients.delete(authorId);
 
     const tokens = [...allRecipients.values()];
 
