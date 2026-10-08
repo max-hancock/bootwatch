@@ -6,6 +6,7 @@ import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { complexes, CUSTOM_TIMER_ID, getComplexById } from '../data/complexes';
 import { useParkingTimer, TimerPhase } from '../hooks/useParkingTimer';
 import RiskBadge from '../components/RiskBadge';
+import BootPatternNote from '../components/BootPatternNote';
 import { fontSize, spacing, borderRadius, fonts } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { showTimerMascot } from '../config/features';
@@ -167,7 +168,9 @@ export default function TimerScreen() {
     return (
       <ScreenGradientBackdrop>
       <View style={styles.container}>
-        <View style={styles.timerActive}>
+        {/* Scrolls when the content is taller than the screen (small phones, large text,
+            the notifications-off banner) so nothing ever sits on top of the leave button. */}
+        <ScrollView style={styles.container} contentContainerStyle={styles.timerActive}>
           {activeDisplayComplex && (
             <View style={styles.activeComplexInfo}>
               <Text style={styles.activeComplexName}>{activeDisplayComplex.name}</Text>
@@ -193,6 +196,10 @@ export default function TimerScreen() {
                 ? "Visitor time is up. You’ll still get area alerts until you’ve left. Tap I’ve left when you go."
                 : "Time is up \u2014 move your car!")}
           </Text>
+
+          {activeDisplayComplex && timer.phase !== 'expired' && (
+            <BootPatternNote complexId={activeDisplayComplex.id} onlyWhenPeak style={styles.patternNoteActive} />
+          )}
 
           {showTimerMascot && timer.phase !== 'expired' && (
             <View style={styles.timerMascotWrap}>
@@ -278,16 +285,18 @@ export default function TimerScreen() {
                   : "I'm Leaving"}
             </Text>
           </Pressable>
-        </View>
 
-        {timer.permissionStatus !== 'granted' && (
-          <View style={styles.permissionBanner}>
-            <Ionicons name="notifications-off-outline" size={18} color={colors.warning} />
-            <Text style={styles.permissionText}>
-              Notifications disabled — you won't get alerts when time is low or booter is reported in area.
-            </Text>
-          </View>
-        )}
+          {/* Below the button, in the normal flow: it used to be pinned under an
+              overflowing column and covered the button. */}
+          {timer.permissionStatus !== 'granted' && (
+            <View style={[styles.permissionBanner, styles.permissionBannerActive]}>
+              <Ionicons name="notifications-off-outline" size={18} color={colors.warning} />
+              <Text style={styles.permissionText}>
+                Notifications disabled — you won't get alerts when time is low or booter is reported in area.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
       </View>
       </ScreenGradientBackdrop>
     );
@@ -336,6 +345,15 @@ export default function TimerScreen() {
           </Text>
           <Text style={styles.changeText}>Tap to change</Text>
         </Pressable>
+      )}
+
+      {/* When boot trucks usually show up here, right as they decide to park */}
+      {selectedComplex && !showSelector && (
+        <BootPatternNote
+          complexId={selectedComplex.id}
+          fallbackHint={selectedComplex.peakActivityHint}
+          style={styles.patternNoteSetup}
+        />
       )}
 
       {/* Custom timer preview */}
@@ -487,6 +505,13 @@ function createStyles(colors: any) {
     fontFamily: fonts.display,
     color: colors.text,
   },
+  patternNoteSetup: {
+    marginBottom: spacing.md,
+  },
+  patternNoteActive: {
+    marginTop: spacing.md,
+    marginHorizontal: spacing.md,
+  },
   selectedCardDetail: {
     fontSize: fontSize.sm,
     fontFamily: fonts.body,
@@ -610,7 +635,7 @@ function createStyles(colors: any) {
 
   // Active timer
   timerActive: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,
@@ -761,6 +786,10 @@ function createStyles(colors: any) {
     margin: spacing.md,
     borderRadius: borderRadius.md,
     gap: spacing.sm,
+  },
+  permissionBannerActive: {
+    alignSelf: 'stretch',
+    margin: 0,
   },
   permissionText: {
     fontSize: fontSize.sm,
