@@ -2,16 +2,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused, useRoute } from '@react-navigation/native';
 import { complexes, CUSTOM_TIMER_ID, getComplexById } from '../data/complexes';
 import { useParkingTimer, TimerPhase } from '../hooks/useParkingTimer';
-import RiskBadge from '../components/RiskBadge';
+import { formatDistance, useNearestComplexes } from '../hooks/useNearestComplexes';
+import { Complex } from '../types/complex';
 import BootPatternNote from '../components/BootPatternNote';
 import { fontSize, spacing, borderRadius, fonts } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import ScreenGradientBackdrop from '../components/ScreenGradientBackdrop';
 import { formatVisitorLimitMinutes } from '../utils/parkingDisplay';
 import { getVisitorLimitMarkerColor } from '../utils/visitorLimitColors';
+
+/** Quick picks when a complex has no posted visitor limit to count down from. */
+const OWN_TIME_OPTIONS = [
+  { label: '30 min', minutes: 30 },
+  { label: '1 hour', minutes: 60 },
+  { label: '2 hours', minutes: 120 },
+  { label: '4 hours', minutes: 240 },
+];
 
 function formatTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -38,6 +47,14 @@ export default function TimerScreen() {
   const [customMinutes, setCustomMinutes] = useState('');
   const [showSelector, setShowSelector] = useState(false);
   const [showPushExplainer, setShowPushExplainer] = useState(false);
+  const [search, setSearch] = useState('');
+  /** Minutes the user chose themselves, for a complex with no posted visitor limit. */
+  const [ownMinutes, setOwnMinutes] = useState('');
+
+  // Look up the closest complexes whenever the setup screen is on show, so someone
+  // who has just parked can pick theirs without searching.
+  const isFocused = useIsFocused();
+  const nearest = useNearestComplexes(isFocused && !timer.isRunning && timer.phase !== 'expired');
 
   useFocusEffect(
     useCallback(() => {
@@ -82,13 +99,33 @@ export default function TimerScreen() {
     return getComplexById(id) ?? null;
   }, [selectedId, timer.activeComplexId]);
 
+  // Unlimited or unknown visitor limit: there is nothing to count down from, so the
+  // user sets their own time (and still gets area alerts for that complex).
+  const needsOwnTime = !!selectedComplex && !((selectedComplex.visitorTimeLimitMinutes ?? 0) > 0);
+
+  useEffect(() => {
+    setOwnMinutes('');
+  }, [selectedId]);
+
   const durationMinutes = useMemo(() => {
-    if (selectedId === CUSTOM_TIMER_ID) {
-      const parsed = parseInt(customMinutes, 10);
+    const typed = selectedId === CUSTOM_TIMER_ID ? customMinutes : needsOwnTime ? ownMinutes : null;
+    if (typed !== null) {
+      const parsed = parseInt(typed, 10);
       return isNaN(parsed) || parsed <= 0 ? 0 : parsed;
     }
     return selectedComplex?.visitorTimeLimitMinutes ?? 0;
-  }, [selectedId, selectedComplex, customMinutes]);
+  }, [selectedId, selectedComplex, customMinutes, needsOwnTime, ownMinutes]);
+
+  const filteredComplexes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? complexes.filter((c) => c.name.toLowerCase().includes(q)) : complexes;
+  }, [search]);
+
+  const pickComplex = useCallback((id: string) => {
+    setSelectedId(id);
+    setShowSelector(false);
+    setSearch('');
+  }, []);
 
   const canStart = durationMinutes > 0 && !timer.isRunning && timer.phase !== 'expired';
 
@@ -98,9 +135,9 @@ export default function TimerScreen() {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
       const complexId = selectedId !== CUSTOM_TIMER_ID ? selectedId ?? undefined : undefined;
-      timer.start(durationMinutes, complexId);
+      timer.start(durationMinutes, complexId, needsOwnTime);
     }
-  }, [canStart, durationMinutes, selectedId, timer]);
+  }, [canStart, durationMinutes, selectedId, timer, needsOwnTime]);
 
   const phaseColor = PHASE_COLORS[timer.phase];
 
@@ -131,13 +168,14 @@ export default function TimerScreen() {
     const notificationsOn = timer.permissionStatus === 'granted';
     const overLimit =
       timer.phase === 'expired' && timer.parkingOverLimit && !!(timer.activeComplexId || activeDisplayComplex);
+    // The complex has no posted limit, so the countdown was a time the user set themselves.
+    const selfSet = !!activeDisplayComplex && !((activeDisplayComplex.visitorTimeLimitMinutes ?? 0) > 0);
     return (
       <ScreenGradientBackdrop>
       <View style={styles.timerActive}>
         {activeDisplayComplex && (
           <View style={styles.activeComplexInfo}>
             <Text style={styles.activeComplexName}>{activeDisplayComplex.name}</Text>
-            <RiskBadge level={activeDisplayComplex.riskLevel} />
           </View>
         )}
         {selectedId === CUSTOM_TIMER_ID && !activeDisplayComplex && (
@@ -153,11 +191,14 @@ export default function TimerScreen() {
         <Text style={[styles.phaseLabel, { color: phaseColor }]}>
           {timer.phase === 'running' && "You're good \u2014 timer running"}
           {timer.phase === 'warning' && "Heads up \u2014 under 10 minutes"}
-          {timer.phase === 'critical' && "Move now \u2014 under 5 minutes!"}
+          {timer.phase === 'critical' &&
+            (selfSet ? 'Under 5 minutes left on your timer' : "Move now \u2014 under 5 minutes!")}
           {timer.phase === 'expired' &&
-            (overLimit
-              ? "Visitor time is up. You’ll still get area alerts until you’ve left. Tap I’ve left when you go."
-              : "Time is up \u2014 move your car!")}
+            (selfSet
+              ? "Your timer is done. You’ll still get area alerts until you’ve left. Tap I’ve left when you go."
+              : overLimit
+                ? "Visitor time is up. You’ll still get area alerts until you’ve left. Tap I’ve left when you go."
+                : "Time is up \u2014 move your car!")}
         </Text>
 
         <View style={styles.progressBarTrack}>
@@ -215,10 +256,38 @@ export default function TimerScreen() {
     );
   }
 
+  const renderComplexRow = (c: Complex, meters?: number) => (
+    <Pressable
+      key={meters === undefined ? c.id : `near-${c.id}`}
+      style={[styles.selectorItem, selectedId === c.id && styles.selectorItemActive]}
+      onPress={() => pickComplex(c.id)}
+    >
+      <View
+        style={[
+          styles.riskDot,
+          { backgroundColor: getVisitorLimitMarkerColor(c.visitorTimeLimitMinutes, c.visitorLimitSignageKnown) },
+        ]}
+      />
+      <View style={styles.selectorItemContent}>
+        <Text style={styles.selectorItemText} numberOfLines={2} ellipsizeMode="tail">
+          {c.name}
+        </Text>
+        <Text style={styles.selectorItemMeta}>
+          {formatVisitorLimitMinutes(c.visitorTimeLimitMinutes, c.visitorLimitSignageKnown)}
+          {meters !== undefined ? ` · ${formatDistance(meters)} away` : ''}
+        </Text>
+      </View>
+    </Pressable>
+  );
+
   // ─── Setup View ───
   return (
     <ScreenGradientBackdrop>
-    <ScrollView style={styles.container} contentContainerStyle={styles.setupContent}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.setupContent}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={styles.heading}>Start a Parking Timer</Text>
       <Text style={styles.subheading}>Select where you're parked</Text>
 
@@ -246,7 +315,6 @@ export default function TimerScreen() {
             <Text style={styles.selectedCardName} numberOfLines={2} ellipsizeMode="tail">
               {selectedComplex.name}
             </Text>
-            <RiskBadge level={selectedComplex.riskLevel} />
           </View>
           <Text style={styles.selectedCardDetail}>
             {formatVisitorLimitMinutes(
@@ -267,6 +335,47 @@ export default function TimerScreen() {
           fallbackHint={selectedComplex.peakActivityHint}
           style={styles.patternNoteSetup}
         />
+      )}
+
+      {/* No posted limit: let them set their own time instead of a dead Start button */}
+      {needsOwnTime && selectedComplex && !showSelector && (
+        <View style={styles.customTimerCard}>
+          <Text style={styles.ownTimeTitle}>How long are you staying?</Text>
+          <Text style={styles.ownTimeHint}>
+            {selectedComplex.visitorLimitSignageKnown === false
+              ? "We don't have the visitor limit for this complex yet. Check the sign, then set your own timer."
+              : 'No visitor time limit is posted here. Set a timer anyway to get booter alerts while you are parked.'}
+          </Text>
+          <View style={styles.ownTimeChips}>
+            {OWN_TIME_OPTIONS.map((opt) => {
+              const active = ownMinutes === String(opt.minutes);
+              return (
+                <Pressable
+                  key={opt.minutes}
+                  onPress={() => setOwnMinutes(String(opt.minutes))}
+                  style={[styles.ownTimeChip, active && styles.ownTimeChipActive]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.ownTimeChipText, active && styles.ownTimeChipTextActive]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.customInputRow}>
+            <TextInput
+              style={styles.customInput}
+              value={ownMinutes}
+              onChangeText={setOwnMinutes}
+              placeholder="60"
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="number-pad"
+              maxLength={3}
+              accessibilityLabel="Minutes"
+            />
+            <Text style={styles.customInputLabel}>minutes</Text>
+          </View>
+        </View>
       )}
 
       {/* Custom timer preview */}
@@ -294,36 +403,48 @@ export default function TimerScreen() {
       {/* Complex selector */}
       {(showSelector || !selectedId) && (
         <View style={styles.selectorList}>
-          <Pressable
-            style={[styles.selectorItem, selectedId === CUSTOM_TIMER_ID && styles.selectorItemActive]}
-            onPress={() => { setSelectedId(CUSTOM_TIMER_ID); setShowSelector(false); }}
-          >
-            <Ionicons name="create-outline" size={20} color={colors.primary} />
-            <Text style={styles.selectorItemText}>Custom Timer</Text>
-          </Pressable>
+          <View style={styles.searchRow}>
+            <Ionicons name="search" size={18} color={colors.textSecondary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search complexes..."
+              placeholderTextColor={colors.textSecondary}
+              value={search}
+              onChangeText={setSearch}
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {search.length > 0 && (
+              <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear search">
+                <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+              </Pressable>
+            )}
+          </View>
 
-          {complexes.map((c) => (
+          {/* Closest complexes first, from GPS. Hidden while searching. */}
+          {search.trim().length === 0 && nearest.length > 0 && (
+            <>
+              <Text style={styles.selectorSectionLabel}>Nearest to you</Text>
+              {nearest.map((n) => renderComplexRow(n.complex, n.meters))}
+              <Text style={styles.selectorSectionLabel}>All complexes</Text>
+            </>
+          )}
+
+          {search.trim().length === 0 && (
             <Pressable
-              key={c.id}
-              style={[styles.selectorItem, selectedId === c.id && styles.selectorItemActive]}
-              onPress={() => { setSelectedId(c.id); setShowSelector(false); }}
+              style={[styles.selectorItem, selectedId === CUSTOM_TIMER_ID && styles.selectorItemActive]}
+              onPress={() => pickComplex(CUSTOM_TIMER_ID)}
             >
-              <View
-                style={[
-                  styles.riskDot,
-                  { backgroundColor: getVisitorLimitMarkerColor(c.visitorTimeLimitMinutes, c.visitorLimitSignageKnown) },
-                ]}
-              />
-              <View style={styles.selectorItemContent}>
-                <Text style={styles.selectorItemText} numberOfLines={2} ellipsizeMode="tail">
-                  {c.name}
-                </Text>
-                <Text style={styles.selectorItemMeta}>
-                  {formatVisitorLimitMinutes(c.visitorTimeLimitMinutes, c.visitorLimitSignageKnown)}
-                </Text>
-              </View>
+              <Ionicons name="create-outline" size={20} color={colors.primary} />
+              <Text style={styles.selectorItemText}>Custom Timer</Text>
             </Pressable>
-          ))}
+          )}
+
+          {filteredComplexes.map((c) => renderComplexRow(c))}
+
+          {filteredComplexes.length === 0 && (
+            <Text style={styles.selectorEmpty}>No complexes match "{search.trim()}".</Text>
+          )}
         </View>
       )}
 
@@ -331,7 +452,7 @@ export default function TimerScreen() {
       {selectedId && !showSelector && (
         <View style={styles.startSection}>
           <Text style={styles.durationSummary}>
-            Timer: {durationMinutes > 0 ? formatVisitorLimitMinutes(durationMinutes) : 'Enter a duration'}
+            Timer: {durationMinutes > 0 ? formatVisitorLimitMinutes(durationMinutes) : 'Choose how long above'}
           </Text>
           <Pressable
             style={[styles.startButton, !canStart && styles.startButtonDisabled]}
@@ -490,6 +611,77 @@ function createStyles(colors: any) {
     fontSize: fontSize.md,
     fontFamily: fonts.body,
     color: colors.textSecondary,
+  },
+
+  ownTimeTitle: {
+    fontSize: fontSize.md,
+    fontFamily: fonts.bodyMedium,
+    color: colors.text,
+  },
+  ownTimeHint: {
+    fontSize: fontSize.sm,
+    fontFamily: fonts.body,
+    color: colors.textSecondary,
+    lineHeight: 19,
+  },
+  ownTimeChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  ownTimeChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  ownTimeChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.infoTint,
+  },
+  ownTimeChipText: {
+    fontSize: fontSize.sm,
+    fontFamily: fonts.body,
+    color: colors.textSecondary,
+  },
+  ownTimeChipTextActive: {
+    color: colors.primary,
+    fontFamily: fonts.bodyMedium,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    fontSize: fontSize.md,
+    fontFamily: fonts.body,
+    color: colors.text,
+    outlineStyle: 'none' as any,
+  },
+  selectorSectionLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: fonts.bodyMedium,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: spacing.xs,
+  },
+  selectorEmpty: {
+    fontSize: fontSize.sm,
+    fontFamily: fonts.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingVertical: spacing.md,
   },
 
   // Selector list

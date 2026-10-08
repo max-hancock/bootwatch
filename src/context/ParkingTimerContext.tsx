@@ -50,7 +50,8 @@ function totalSessionSeconds(endMs: number, createdMs: number, remaining: number
 }
 
 export type ParkingTimerContextValue = TimerState & {
-  start: (durationMinutes: number, complexId?: string) => Promise<void>;
+  /** selfSet: the user chose the duration because the complex has no posted visitor limit. */
+  start: (durationMinutes: number, complexId?: string, selfSet?: boolean) => Promise<void>;
   cancel: () => Promise<void>;
   permissionStatus: PermissionStatus;
   activeComplexId: string | null;
@@ -231,7 +232,7 @@ export function ParkingTimerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const start = useCallback(
-    async (durationMinutes: number, complexId?: string) => {
+    async (durationMinutes: number, complexId?: string, selfSet = false) => {
       const totalSeconds = durationMinutes * 60;
       const endTime = Date.now() + totalSeconds * 1000;
       endTimeRef.current = endTime;
@@ -281,20 +282,25 @@ export function ParkingTimerProvider({ children }: { children: ReactNode }) {
         if (totalSeconds > 600) {
           await scheduleNotification(
             '⏱️ 10 minutes left!',
-            'Your visitor parking time is almost up. Head back soon.',
+            selfSet
+              ? 'The timer you set is almost up.'
+              : 'Your visitor parking time is almost up. Head back soon.',
             totalSeconds - 600,
           );
         }
         if (totalSeconds > 300) {
           await scheduleNotification(
-            '⚠️ 5 minutes left!',
-            'Move your car now to avoid getting booted!',
+            selfSet ? '⏱️ 5 minutes left' : '⚠️ 5 minutes left!',
+            selfSet ? 'The timer you set ends in 5 minutes.' : 'Move your car now to avoid getting booted!',
             totalSeconds - 300,
           );
         }
+        // No posted limit means nothing is being enforced at this moment, so don't tell them to move.
         await scheduleNotification(
-          '🚨 Time expired!',
-          'Your visitor parking time is up. Move your car immediately!',
+          selfSet ? '⏱️ Timer finished' : '🚨 Time expired!',
+          selfSet
+            ? "The time you set is up. Open BootWatch and tap I've left when you go."
+            : 'Your visitor parking time is up. Move your car immediately!',
           totalSeconds,
         );
       }
