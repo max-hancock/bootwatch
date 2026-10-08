@@ -90,3 +90,11 @@ release.
   sharing, comments) that are in the release. Existing users never see
   onboarding again, so consider a one-time "What's new" screen for them too.
   Remove this item once the slides match the shipped feature set.
+- **Location permission wording (needs a new App Store build).** The Timer tab
+  now uses GPS to list the nearest complexes
+  (`src/hooks/useNearestComplexes.ts`). The iOS permission text in `app.json`
+  (`expo-location` → `locationWhenInUsePermission`) still only mentions the
+  map and "nearby spotter context". Update it to also say location is used to
+  suggest the complex you are parked at. This is native config, so it cannot go
+  out by OTA: change it in the next binary submission. Remove this item once
+  the new wording has shipped.
