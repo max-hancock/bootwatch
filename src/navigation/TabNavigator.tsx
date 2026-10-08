@@ -66,7 +66,11 @@ export default function TabNavigator() {
         component={MapScreen}
         options={{ title: 'Map', headerTitleAlign: 'left', headerTitle: () => <BrandHeaderTitle section="Map" /> }}
       />
-      <Tab.Screen name="Timer" component={TimerScreen} options={{ title: 'Timer' }} />
+      <Tab.Screen
+        name="Timer"
+        component={TimerScreen}
+        options={{ title: 'Timer', headerTitleAlign: 'left', headerTitle: () => <BrandHeaderTitle section="Timer" /> }}
+      />
       {/* These screens carry the brand in the header; `title` still names the tab. */}
       <Tab.Screen
         name="Feed"
