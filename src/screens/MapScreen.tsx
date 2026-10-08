@@ -1,8 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-const BOOTWATCH_MARK = require('../../assets/android-icon-foreground.png');
 import { useNavigation } from '@react-navigation/native';
 import { complexes } from '../data/complexes';
 import { Complex } from '../types/complex';
@@ -13,7 +11,6 @@ import ComplexDetailSheet from '../components/ComplexDetailSheet';
 import ReportSightingModal from '../components/ReportSightingModal';
 import { fontSize, fontWeight, spacing, borderRadius, shadowFloat, shadowCard, fonts } from '../theme';
 import { useTheme } from '../context/ThemeContext';
-import { useToast } from '../context/ToastContext';
 import { formatVisitorLimitMinutes } from '../utils/parkingDisplay';
 import { VISITOR_LIMIT_LEGEND, getVisitorLimitMarkerColor } from '../utils/visitorLimitColors';
 
@@ -29,7 +26,6 @@ type MapMode = 'complexes' | 'heatmap';
 
 export default function MapScreen() {
   const { colors } = useTheme();
-  const { show: showToast } = useToast();
   const [search, setSearch] = useState('');
   const [selectedComplex, setSelectedComplex] = useState<Complex | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -186,17 +182,6 @@ export default function MapScreen() {
               )))}
       </View>
 
-      {/* Brand watermark — sits above the panel, fades when the apartment list opens */}
-      {!panelExpanded && (
-        <View style={styles.brandWatermark} pointerEvents="none">
-          <Image source={BOOTWATCH_MARK} style={styles.brandWatermarkLogo} resizeMode="contain" />
-          <View style={styles.brandWatermarkTextRow}>
-            <Text style={styles.brandWatermarkText}>BootWatch</Text>
-            <Text style={styles.brandWatermarkTm}>™</Text>
-          </View>
-        </View>
-      )}
-
       {/* Collapsible bottom panel */}
       <View style={[styles.panel, panelExpanded && styles.panelExpanded]}>
         <Pressable style={styles.panelHandle} onPress={() => setPanelExpanded(!panelExpanded)}>
@@ -292,10 +277,6 @@ export default function MapScreen() {
         onSuccess={() => {
           refreshSightings();
           void refreshHeat(true);
-          showToast({
-            message: 'Thanks for the heads-up — others nearby will see it.',
-            icon: 'heart',
-          });
         }}
         initialComplexId={reportInitialComplexId}
       />
@@ -321,49 +302,6 @@ function createStyles(colors: any) {
     right: 0,
     zIndex: 10,
     padding: spacing.md,
-  },
-  brandWatermark: {
-    position: 'absolute',
-    bottom: 60,
-    left: spacing.md,
-    zIndex: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 6,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadowCard,
-  },
-  brandWatermarkLogo: {
-    width: 42,
-    height: 42,
-  },
-  brandWatermarkTextRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  brandWatermarkText: {
-    fontSize: fontSize.xl,
-    fontFamily: fonts.displayBold,
-    color: colors.text,
-    letterSpacing: 0.3,
-    textShadowColor: 'rgba(255,255,255,0.9)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
-  },
-  brandWatermarkTm: {
-    fontSize: 11,
-    fontFamily: fonts.bodyMedium,
-    color: colors.textSecondary,
-    marginTop: 4,
-    marginLeft: 2,
-    textShadowColor: 'rgba(255,255,255,0.9)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
   },
   searchContainer: {
     flexDirection: 'row',

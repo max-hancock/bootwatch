@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { complexes } from '../data/complexes';
 import { useSavedComplexes } from '../hooks/useSavedComplexes';
+import UserStatsPanel from '../components/UserStatsPanel';
 import { AVATAR_COLORS, DEFAULT_AVATAR_COLOR } from '../utils/avatarColors';
 import { base64ToArrayBuffer } from '../utils/base64ToBytes';
 import { fontSize, spacing, borderRadius, shadowCard, fonts, type AppColors } from '../theme';
@@ -143,6 +144,8 @@ export default function ProfileScreen() {
   const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_AVATAR_COLOR);
   const [saving, setSaving] = useState(false);
   const [nearbyAlerts, setNearbyAlerts] = useState(true);
+  // null until loaded; stays null (switch hidden) on projects without the reaction_alerts column.
+  const [reactionAlerts, setReactionAlerts] = useState<boolean | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
@@ -164,6 +167,20 @@ export default function ProfileScreen() {
           setSelectedColor(data.avatar_color ?? DEFAULT_AVATAR_COLOR);
           setNearbyAlerts(data.nearby_sighting_alerts !== false);
         }
+      });
+  }, [user]);
+
+  // Fetched on its own so a project that hasn't run the reaction-notifications
+  // migration (no reaction_alerts column) still loads the rest of the profile.
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('profiles')
+      .select('reaction_alerts')
+      .eq('id', user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) setReactionAlerts(data.reaction_alerts !== false);
       });
   }, [user]);
 
@@ -241,6 +258,12 @@ export default function ProfileScreen() {
     setNearbyAlerts(value);
     if (!user) return;
     await supabase.from('profiles').update({ nearby_sighting_alerts: value }).eq('id', user.id);
+  }
+
+  async function handleReactionAlertsChange(value: boolean) {
+    setReactionAlerts(value);
+    if (!user) return;
+    await supabase.from('profiles').update({ reaction_alerts: value }).eq('id', user.id);
   }
 
   async function handlePickAvatar() {
@@ -476,6 +499,11 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Your stats</Text>
+        <UserStatsPanel userId={user?.id} />
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Display name</Text>
         {editingName ? (
           <View style={styles.nameEditColumn}>
@@ -604,6 +632,24 @@ export default function ProfileScreen() {
             ios_backgroundColor={colors.border}
           />
         </View>
+        {reactionAlerts !== null && (
+          <View style={styles.switchRow}>
+            <View style={styles.switchLabels}>
+              <Text style={styles.switchTitle}>Reactions to my reports</Text>
+              <Text style={styles.switchHint}>
+                Push when someone thanks you, confirms your report or reacts to it. One per person, and grouped
+                when a report gets a lot of reactions.
+              </Text>
+            </View>
+            <Switch
+              value={reactionAlerts}
+              onValueChange={handleReactionAlertsChange}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.background}
+              ios_backgroundColor={colors.border}
+            />
+          </View>
+        )}
       </View>
 
       <View style={styles.section}>

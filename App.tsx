@@ -10,6 +10,7 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ParkingTimerProvider } from './src/context/ParkingTimerContext';
 import { ToastProvider } from './src/context/ToastContext';
+import { ReportCelebrationProvider } from './src/context/ReportCelebrationContext';
 import { usePushToken } from './src/hooks/usePushToken';
 import TabNavigator from './src/navigation/TabNavigator';
 import AuthScreen from './src/screens/AuthScreen';
@@ -84,6 +85,7 @@ export default function App() {
         <ThemeProvider>
           <ToastProvider>
             <AuthProvider>
+              <ReportCelebrationProvider>
               <NavigationContainer
                 ref={navigationRef}
                 documentTitle={{
@@ -94,6 +96,7 @@ export default function App() {
                 <RootNavigator />
                 <ThemedStatusBar />
               </NavigationContainer>
+              </ReportCelebrationProvider>
             </AuthProvider>
           </ToastProvider>
         </ThemeProvider>

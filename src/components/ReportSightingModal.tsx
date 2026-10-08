@@ -11,6 +11,8 @@ import { ReportType } from '../types/sighting';
 import { getVisitorLimitMarkerColor } from '../utils/visitorLimitColors';
 import { fontSize, spacing, borderRadius, shadowFloat, fonts } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useReportCelebration } from '../context/ReportCelebrationContext';
+import { snoozeReportPrompt } from '../hooks/useReportPrompt';
 
 interface Props {
   visible: boolean;
@@ -31,6 +33,7 @@ const TIME_OPTIONS = [
 export default function ReportSightingModal({ visible, onClose, onSuccess, initialComplexId }: Props) {
   const { user } = useAuth();
   const { colors } = useTheme();
+  const { celebrate } = useReportCelebration();
   const styles = createStyles(colors);
   const [reportType, setReportType] = useState<ReportType>('spotter');
   const [selectedComplexId, setSelectedComplexId] = useState<string | null>(null);
@@ -144,7 +147,12 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
       const mime = photoMime
         ?? (extFromUri === 'png' ? 'image/png' : extFromUri === 'heic' ? 'image/heic' : 'image/jpeg');
       const ext = mime === 'image/png' ? 'png' : mime === 'image/heic' ? 'heic' : 'jpg';
-      const fileName = `${user!.id}/${Date.now()}.${ext}`;
+      // Anonymous photos go under anon/ with a random name: the public URL is
+      // stored on the sighting, so the usual <user id>/ folder would identify the poster.
+      // Needs supabase/2026-10-04_anonymous_sighting_photo_paths.sql on the project.
+      const fileName = isAnonymous
+        ? `anon/${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}.${ext}`
+        : `${user!.id}/${Date.now()}.${ext}`;
 
       // expo-image-picker returns base64 directly when requested. This avoids
       // the broken `fetch(file://...).arrayBuffer()` path on iOS native, which
@@ -233,26 +241,37 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
       if (Platform.OS === 'web') alert(`Could not submit report.\n\n${body}`);
       else Alert.alert('Could not submit report', body || 'Please try again.');
     } else {
-      if (inserted?.id) {
-        void supabase.functions
-          .invoke('notify-sighting', {
-            body: {
-              type: 'INSERT',
-              table: 'sightings',
-              schema: 'public',
-              record: { id: inserted.id },
-              old_record: null,
-            },
-          })
-          .then(({ error: invErr }) => {
-            if (invErr) console.warn('[ReportSighting] notify-sighting', invErr.message);
-          })
-          .catch((e) => console.warn('[ReportSighting] notify-sighting', e));
-      }
+      // Resolves to how many people were pushed an alert, for the celebration.
+      // Null when unknown — e.g. the DB webhook dispatched first and this call was deduped.
+      const alerted: Promise<number | null> = inserted?.id
+        ? supabase.functions
+            .invoke('notify-sighting', {
+              body: {
+                type: 'INSERT',
+                table: 'sightings',
+                schema: 'public',
+                record: { id: inserted.id },
+                old_record: null,
+              },
+            })
+            .then(({ data, error: invErr }) => {
+              if (invErr) {
+                console.warn('[ReportSighting] notify-sighting', invErr.message);
+                return null;
+              }
+              return typeof data?.sent === 'number' ? (data.sent as number) : null;
+            })
+            .catch((e) => {
+              console.warn('[ReportSighting] notify-sighting', e);
+              return null;
+            })
+        : Promise.resolve(null);
+      celebrate({ reportType, alerted });
       if (Platform.OS !== 'web') {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      const hadPhotoFailure = (!!photoUri || !!photoBase64) && !photoUrl;
+      snoozeReportPrompt();
+      const hadPhotoFailure =(!!photoUri || !!photoBase64) && !photoUrl;
       const failureReason = uploadReason;
       setReportType('spotter');
       setSelectedComplexId(null);

@@ -13,18 +13,22 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSightings } from '../hooks/useSightings';
 import { useAuth } from '../context/AuthContext';
-import { Sighting } from '../types/sighting';
+import { ReactionKind, Sighting } from '../types/sighting';
 import { timeAgo, isWithinHours } from '../utils/time';
 import ReportSightingModal from '../components/ReportSightingModal';
 import PhotoLightbox from '../components/PhotoLightbox';
+import { EmojiPickerModal, ReactorsModal } from '../components/ReactionSheets';
+import UserProfileCard from '../components/UserProfileCard';
+import { EXTRA_REACTIONS } from '../utils/reactions';
 import ScreenGradientBackdrop from '../components/ScreenGradientBackdrop';
 import { DEFAULT_AVATAR_COLOR } from '../utils/avatarColors';
 import { fontSize, spacing, borderRadius, shadowCard } from '../theme';
 import { fonts } from '../theme/fonts';
 import { useTheme } from '../context/ThemeContext';
-import { useToast } from '../context/ToastContext';
 
 const BOOTWATCH_EMPTY = require('../../assets/android-icon-monochrome.png');
 
@@ -57,16 +61,31 @@ function PulseBadge({
 
 export default function FeedScreen() {
   const { colors } = useTheme();
-  const { show: showToast } = useToast();
   const styles = createStyles(colors);
-  const { sightings, loading, error, refresh, deleteSighting } = useSightings();
+  const { sightings, loading, error, refresh, deleteSighting, isOwnSighting, hasReacted, toggleReaction } = useSightings();
   const { user } = useAuth();
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const [reportVisible, setReportVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
+  /** Sighting the "+" emoji picker is open for. */
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+  /** Own sighting whose "who reacted" list is open. */
+  const [reactorsFor, setReactorsFor] = useState<string | null>(null);
+  /** User whose profile card is open (tapped from a named report). */
+  const [profileFor, setProfileFor] = useState<string | null>(null);
 
   const openLightbox = useCallback((uri: string) => setLightboxUri(uri), []);
   const closeLightbox = useCallback(() => setLightboxUri(null), []);
+
+  // Opened from the "Seen a booter recently?" prompt — go straight to the report sheet.
+  const openReportParam = route.params?.openReport;
+  useEffect(() => {
+    if (!openReportParam) return;
+    setReportVisible(true);
+    navigation.setParams({ openReport: undefined });
+  }, [openReportParam, navigation]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -99,18 +118,28 @@ export default function FeedScreen() {
     );
   }, [deleteSighting]);
 
+  const handleReact = useCallback((id: string, kind: ReactionKind) => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    void toggleReaction(id, kind);
+  }, [toggleReaction]);
+
   const renderSighting = useCallback(
     ({ item }: { item: Sighting }) => (
       <SightingCard
         item={item}
         styles={styles}
         colors={colors}
-        isOwn={!!user && item.user_id === user.id}
+        isOwn={!!user && (item.user_id === user.id || isOwnSighting(item.id))}
         onDelete={handleDelete}
         onPhotoPress={openLightbox}
+        hasReacted={hasReacted}
+        onReact={handleReact}
+        onOpenPicker={setPickerFor}
+        onShowReactors={setReactorsFor}
+        onProfilePress={setProfileFor}
       />
     ),
-    [styles, colors, user, handleDelete, openLightbox],
+    [styles, colors, user, isOwnSighting, handleDelete, openLightbox, hasReacted, handleReact],
   );
 
   if (loading && sightings.length === 0) {
@@ -192,15 +221,20 @@ export default function FeedScreen() {
       <ReportSightingModal
         visible={reportVisible}
         onClose={() => setReportVisible(false)}
-        onSuccess={() => {
-          refresh();
-          showToast({
-            message: 'Thanks for the heads-up — others nearby will see it.',
-            icon: 'heart',
-          });
-        }}
+        onSuccess={refresh}
       />
       <PhotoLightbox imageUri={lightboxUri} onClose={closeLightbox} />
+      <EmojiPickerModal
+        visible={pickerFor !== null}
+        onClose={() => setPickerFor(null)}
+        isSelected={(kind) => (pickerFor ? hasReacted(pickerFor, kind) : false)}
+        onSelect={(kind) => {
+          if (pickerFor) handleReact(pickerFor, kind);
+          setPickerFor(null);
+        }}
+      />
+      <ReactorsModal sightingId={reactorsFor} onClose={() => setReactorsFor(null)} />
+      <UserProfileCard userId={profileFor} onClose={() => setProfileFor(null)} />
       </View>
     </ScreenGradientBackdrop>
   );
@@ -213,6 +247,11 @@ const SightingCard = React.memo(function SightingCard({
   isOwn,
   onDelete,
   onPhotoPress,
+  hasReacted,
+  onReact,
+  onOpenPicker,
+  onShowReactors,
+  onProfilePress,
 }: {
   item: Sighting;
   styles: ReturnType<typeof createStyles>;
@@ -220,6 +259,11 @@ const SightingCard = React.memo(function SightingCard({
   isOwn: boolean;
   onDelete: (id: string) => void;
   onPhotoPress: (uri: string) => void;
+  hasReacted: (id: string, kind: ReactionKind) => boolean;
+  onReact: (id: string, kind: ReactionKind) => void;
+  onOpenPicker: (id: string) => void;
+  onShowReactors: (id: string) => void;
+  onProfilePress: (userId: string) => void;
 }) {
   const isActive = isWithinHours(item.created_at, 0.5);
   const isRecent = !isActive && isWithinHours(item.created_at, 2);
@@ -243,13 +287,40 @@ const SightingCard = React.memo(function SightingCard({
     : null;
 
   const showAvatarPhoto = !item.is_anonymous && !!item.avatar_url;
+  const profileUserId = !item.is_anonymous ? item.user_id : null;
 
   const tsStyle = isActive ? styles.timestampActive : isRecent ? styles.timestampRecent : undefined;
+
+  // Hidden until the reactions migration has run on this project (columns absent).
+  const showReactions = item.thanks_count !== undefined;
+  // The "+" picker needs the emoji migration (emoji_counts column) as well.
+  const showEmojiPicker = !isOwn && item.emoji_counts !== undefined;
+  const emojiCounts = item.emoji_counts ?? {};
+  const reactions: { kind: ReactionKind; emoji: string; label: string; count: number }[] = [
+    { kind: 'thanks', emoji: '🙏', label: 'Thanks', count: item.thanks_count ?? 0 },
+    // "Saw it too" confirms a truck sighting; it doesn't apply to someone's own boot.
+    ...(isBooted ? [] : [{ kind: 'seen' as const, emoji: '👀', label: 'Saw it too', count: item.seen_count ?? 0 }]),
+    // Extra emoji only appear once someone has used them.
+    ...EXTRA_REACTIONS.filter((r) => (emojiCounts[r.kind] ?? 0) > 0).map((r) => ({
+      kind: r.kind,
+      emoji: r.emoji,
+      label: '',
+      count: emojiCounts[r.kind],
+    })),
+  ];
 
   return (
     <View style={[styles.card, cardVariant]}>
       <View style={styles.cardHeader}>
-        <View style={[styles.avatar, { backgroundColor: avatarBg }]}>
+        <Pressable
+          // Named reports open the poster's profile card; anonymous ones have no one to show.
+          disabled={!profileUserId}
+          onPress={() => profileUserId && onProfilePress(profileUserId)}
+          hitSlop={6}
+          style={[styles.avatar, { backgroundColor: avatarBg }]}
+          accessibilityRole={profileUserId ? 'button' : undefined}
+          accessibilityLabel={profileUserId ? `View ${name}'s profile` : undefined}
+        >
           {avatarIcon ? (
             <Ionicons name={avatarIcon} size={16} color={colors.textInverse} />
           ) : showAvatarPhoto ? (
@@ -261,7 +332,7 @@ const SightingCard = React.memo(function SightingCard({
           ) : (
             <Text style={styles.avatarText}>{initial}</Text>
           )}
-        </View>
+        </Pressable>
         <View style={styles.cardHeaderText}>
           <Text style={[styles.narrative, isStale && styles.narrativeStale]}>
             <Text style={styles.narrativeName}>{name}</Text>
@@ -301,6 +372,45 @@ const SightingCard = React.memo(function SightingCard({
         >
           <Image source={{ uri: item.photo_url }} style={styles.photo} resizeMode="cover" />
         </Pressable>
+      )}
+      {showReactions && (
+        <View style={styles.reactionRow}>
+          {reactions.map((r) => {
+            const reacted = !isOwn && hasReacted(item.id, r.kind);
+            const text = r.label ? (r.count > 0 ? `${r.label} · ${r.count}` : r.label) : String(r.count);
+            return (
+              <Pressable
+                key={r.kind}
+                // You can't react to your own post; tapping shows who reacted instead.
+                onPress={() => (isOwn ? onShowReactors(item.id) : onReact(item.id, r.kind))}
+                hitSlop={6}
+                style={({ pressed }) => [
+                  styles.reactionPill,
+                  reacted && styles.reactionPillActive,
+                  pressed && styles.reactionPillPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: reacted }}
+                accessibilityLabel={`${r.label || r.kind}, ${r.count}`}
+                accessibilityHint={isOwn ? 'Shows who reacted to your report' : undefined}
+              >
+                <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                <Text style={[styles.reactionText, reacted && styles.reactionTextActive]}>{text}</Text>
+              </Pressable>
+            );
+          })}
+          {showEmojiPicker && (
+            <Pressable
+              onPress={() => onOpenPicker(item.id)}
+              hitSlop={6}
+              style={({ pressed }) => [styles.reactionPill, pressed && styles.reactionPillPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Add another reaction"
+            >
+              <Ionicons name="add" size={16} color={colors.textSecondary} />
+            </Pressable>
+          )}
+        </View>
       )}
     </View>
   );
@@ -489,6 +599,41 @@ function createStyles(colors: import('../theme').AppColors) {
     photo: {
       width: '100%',
       height: 160,
+    },
+    reactionRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    reactionPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm + 2,
+      paddingVertical: 6,
+      borderRadius: borderRadius.full,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    reactionPillActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.infoTint,
+    },
+    reactionPillPressed: {
+      opacity: 0.7,
+    },
+    reactionEmoji: {
+      fontSize: fontSize.sm,
+    },
+    reactionText: {
+      fontSize: fontSize.sm,
+      fontFamily: fonts.bodyMedium,
+      color: colors.textSecondary,
+    },
+    reactionTextActive: {
+      color: colors.primary,
     },
     emptyContainer: {
       flexGrow: 1,
