@@ -12,6 +12,7 @@ import { ParkingTimerProvider } from './src/context/ParkingTimerContext';
 import { ToastProvider } from './src/context/ToastContext';
 import { ReportCelebrationProvider } from './src/context/ReportCelebrationContext';
 import { usePushToken } from './src/hooks/usePushToken';
+import { markWhatsNewSeen } from './src/hooks/useWhatsNew';
 import TabNavigator from './src/navigation/TabNavigator';
 import AuthScreen from './src/screens/AuthScreen';
 import PasswordRecoveryScreen from './src/screens/PasswordRecoveryScreen';
@@ -19,6 +20,9 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import ErrorBoundary from './src/components/ErrorBoundary';
 
 const ONBOARDING_KEY = '@bootwatch_onboarded';
+
+/** Tabs a notification is allowed to open via `data.screen`. */
+const NOTIFICATION_SCREENS = ['Map', 'Timer', 'Feed', 'Ranks', 'Profile'];
 
 const WEB_DOCUMENT_TITLE =
   Constants.expoConfig?.name ?? Constants.expoConfig?.slug ?? 'BootWatch';
@@ -35,6 +39,8 @@ function RootNavigator() {
 
   const handleOnboardingComplete = useCallback(() => {
     AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+    // Onboarding just covered the current features, so skip the "What's new" card.
+    markWhatsNewSeen();
     setHasOnboarded(true);
   }, []);
 
@@ -69,14 +75,39 @@ export default function App() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      if (data?.screen === 'Feed') {
-        navigationRef.current?.navigate('Feed');
-      }
-    });
+    let retry: ReturnType<typeof setTimeout> | null = null;
 
-    return () => subscription.remove();
+    // Open the tab the notification names (timer alerts → Timer, sighting and
+    // reaction alerts → Feed). When the tap launched the app, the tabs are not
+    // mounted yet (auth is still loading), so keep trying for a few seconds.
+    const openScreen = (screen: string, attempt = 0) => {
+      const nav = navigationRef.current;
+      if (nav?.isReady() && nav.getRootState()?.routeNames?.includes(screen)) {
+        nav.navigate(screen);
+        return;
+      }
+      if (attempt < 20) retry = setTimeout(() => openScreen(screen, attempt + 1), 300);
+    };
+
+    const handleResponse = (response: Notifications.NotificationResponse | null) => {
+      const screen = response?.notification.request.content.data?.screen;
+      if (typeof screen === 'string' && NOTIFICATION_SCREENS.includes(screen)) openScreen(screen);
+    };
+
+    // The tap that cold-started the app happens before the listener below exists.
+    try {
+      handleResponse(Notifications.getLastNotificationResponse());
+      Notifications.clearLastNotificationResponse();
+    } catch {
+      // Older native module without these calls — taps while running still work.
+    }
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
+
+    return () => {
+      subscription.remove();
+      if (retry) clearTimeout(retry);
+    };
   }, []);
 
   return (

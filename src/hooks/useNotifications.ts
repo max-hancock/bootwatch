@@ -53,7 +53,8 @@ export function useNotifications() {
     if (Platform.OS === 'web' || triggerSeconds <= 0) return null;
 
     return Notifications.scheduleNotificationAsync({
-      content: { title, body, sound: true },
+      // `screen` tells the tap handler in App.tsx which tab to open.
+      content: { title, body, sound: true, data: { screen: 'Timer' } },
       trigger: { seconds: triggerSeconds, type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL },
     });
   }

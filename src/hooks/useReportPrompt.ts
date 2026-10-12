@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { forceReportPrompt } from '../config/features';
+import { isWhatsNewPending } from './useWhatsNew';
 
 const LAST_PROMPT_KEY = '@bootwatch_report_prompt_at';
 
@@ -33,6 +34,9 @@ export function useReportPrompt() {
     if (checking.current) return;
     checking.current = true;
     try {
+      // The "What's new" card goes first; this nudge waits for a later open
+      // (without using up its cooldown) so the two never stack.
+      if (await isWhatsNewPending()) return;
       const raw = await AsyncStorage.getItem(LAST_PROMPT_KEY);
       const last = raw ? Number(raw) : NaN;
       const now = Date.now();
