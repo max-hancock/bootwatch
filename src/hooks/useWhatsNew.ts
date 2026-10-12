@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { claimPromptSlot } from '../utils/promptSlot';
 
 /**
  * Bump this (and update the lines in src/components/WhatsNew.tsx) when a
@@ -38,7 +39,11 @@ export function useWhatsNew() {
   useEffect(() => {
     let cancelled = false;
     void isWhatsNewPending().then((pending) => {
-      if (pending && !cancelled) setVisible(true);
+      if (!pending || cancelled) return;
+      // Takes this launch's popup slot, so the report or invite nudge can't pop up
+      // moments after this card is dismissed.
+      claimPromptSlot();
+      setVisible(true);
     });
     return () => {
       cancelled = true;

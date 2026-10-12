@@ -29,6 +29,8 @@ import { DEFAULT_AVATAR_COLOR } from '../utils/avatarColors';
 import { fontSize, spacing, borderRadius, shadowCard } from '../theme';
 import { fonts } from '../theme/fonts';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
+import { shareSighting } from '../utils/share';
 
 const BOOTWATCH_EMPTY = require('../../assets/android-icon-monochrome.png');
 
@@ -118,6 +120,13 @@ export default function FeedScreen() {
     );
   }, [deleteSighting]);
 
+  const { show: showToast } = useToast();
+  const handleShare = useCallback(async (item: Sighting) => {
+    const outcome = await shareSighting(item);
+    // No share sheet (desktop browsers): the text went to the clipboard instead.
+    if (outcome === 'copied') showToast({ message: 'Copied. Paste it in your group chat.', icon: 'copy' });
+  }, [showToast]);
+
   const handleReact = useCallback((id: string, kind: ReactionKind) => {
     if (Platform.OS !== 'web') void Haptics.selectionAsync();
     void toggleReaction(id, kind);
@@ -137,9 +146,10 @@ export default function FeedScreen() {
         onOpenPicker={setPickerFor}
         onShowReactors={setReactorsFor}
         onProfilePress={setProfileFor}
+        onShare={handleShare}
       />
     ),
-    [styles, colors, user, isOwnSighting, handleDelete, openLightbox, hasReacted, handleReact],
+    [styles, colors, user, isOwnSighting, handleDelete, openLightbox, hasReacted, handleReact, handleShare],
   );
 
   if (loading && sightings.length === 0) {
@@ -252,6 +262,7 @@ const SightingCard = React.memo(function SightingCard({
   onOpenPicker,
   onShowReactors,
   onProfilePress,
+  onShare,
 }: {
   item: Sighting;
   styles: ReturnType<typeof createStyles>;
@@ -264,6 +275,7 @@ const SightingCard = React.memo(function SightingCard({
   onOpenPicker: (id: string) => void;
   onShowReactors: (id: string) => void;
   onProfilePress: (userId: string) => void;
+  onShare: (item: Sighting) => void;
 }) {
   const isActive = isWithinHours(item.created_at, 0.5);
   const isRecent = !isActive && isWithinHours(item.created_at, 2);
@@ -373,45 +385,54 @@ const SightingCard = React.memo(function SightingCard({
           <Image source={{ uri: item.photo_url }} style={styles.photo} resizeMode="cover" />
         </Pressable>
       )}
-      {showReactions && (
-        <View style={styles.reactionRow}>
-          {reactions.map((r) => {
-            const reacted = !isOwn && hasReacted(item.id, r.kind);
-            const text = r.label ? (r.count > 0 ? `${r.label} · ${r.count}` : r.label) : String(r.count);
-            return (
-              <Pressable
-                key={r.kind}
-                // You can't react to your own post; tapping shows who reacted instead.
-                onPress={() => (isOwn ? onShowReactors(item.id) : onReact(item.id, r.kind))}
-                hitSlop={6}
-                style={({ pressed }) => [
-                  styles.reactionPill,
-                  reacted && styles.reactionPillActive,
-                  pressed && styles.reactionPillPressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: reacted }}
-                accessibilityLabel={`${r.label || r.kind}, ${r.count}`}
-                accessibilityHint={isOwn ? 'Shows who reacted to your report' : undefined}
-              >
-                <Text style={styles.reactionEmoji}>{r.emoji}</Text>
-                <Text style={[styles.reactionText, reacted && styles.reactionTextActive]}>{text}</Text>
-              </Pressable>
-            );
-          })}
-          {showEmojiPicker && (
+      <View style={styles.reactionRow}>
+        {showReactions && reactions.map((r) => {
+          const reacted = !isOwn && hasReacted(item.id, r.kind);
+          const text = r.label ? (r.count > 0 ? `${r.label} · ${r.count}` : r.label) : String(r.count);
+          return (
             <Pressable
-              onPress={() => onOpenPicker(item.id)}
+              key={r.kind}
+              // You can't react to your own post; tapping shows who reacted instead.
+              onPress={() => (isOwn ? onShowReactors(item.id) : onReact(item.id, r.kind))}
               hitSlop={6}
-              style={({ pressed }) => [styles.reactionPill, pressed && styles.reactionPillPressed]}
+              style={({ pressed }) => [
+                styles.reactionPill,
+                reacted && styles.reactionPillActive,
+                pressed && styles.reactionPillPressed,
+              ]}
               accessibilityRole="button"
-              accessibilityLabel="Add another reaction"
+              accessibilityState={{ selected: reacted }}
+              accessibilityLabel={`${r.label || r.kind}, ${r.count}`}
+              accessibilityHint={isOwn ? 'Shows who reacted to your report' : undefined}
             >
-              <Ionicons name="add" size={16} color={colors.textSecondary} />
+              <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+              <Text style={[styles.reactionText, reacted && styles.reactionTextActive]}>{text}</Text>
             </Pressable>
-          )}
-        </View>
-      )}
+          );
+        })}
+        {showReactions && showEmojiPicker && (
+          <Pressable
+            onPress={() => onOpenPicker(item.id)}
+            hitSlop={6}
+            style={({ pressed }) => [styles.reactionPill, pressed && styles.reactionPillPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Add another reaction"
+          >
+            <Ionicons name="add" size={16} color={colors.textSecondary} />
+          </Pressable>
+        )}
+        {/* Sends a ready-made message (place, time, App Store link) to the system share sheet. */}
+        <Pressable
+          onPress={() => onShare(item)}
+          hitSlop={6}
+          style={({ pressed }) => [styles.reactionPill, styles.sharePill, pressed && styles.reactionPillPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Share this report"
+        >
+          <Ionicons name="share-outline" size={15} color={colors.textSecondary} />
+          <Text style={styles.reactionText}>Share</Text>
+        </Pressable>
+      </View>
     </View>
   );
 });
@@ -620,6 +641,10 @@ function createStyles(colors: import('../theme').AppColors) {
     reactionPillActive: {
       borderColor: colors.primary,
       backgroundColor: colors.infoTint,
+    },
+    // Pushed to the far end of the row, away from the reactions.
+    sharePill: {
+      marginLeft: 'auto',
     },
     reactionPillPressed: {
       opacity: 0.7,

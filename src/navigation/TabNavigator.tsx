@@ -8,6 +8,7 @@ import LeaderboardScreen from '../screens/LeaderboardScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ReportPrompt from '../components/ReportPrompt';
 import WhatsNew from '../components/WhatsNew';
+import InvitePrompt from '../components/InvitePrompt';
 import BrandHeaderTitle from '../components/BrandHeaderTitle';
 import { useTheme } from '../context/ThemeContext';
 import { fonts } from '../theme/fonts';
@@ -86,6 +87,7 @@ export default function TabNavigator() {
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
     </Tab.Navigator>
     <ReportPrompt />
+    <InvitePrompt />
     <WhatsNew />
     </>
   );

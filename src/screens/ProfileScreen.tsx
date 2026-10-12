@@ -23,6 +23,9 @@ import { AVATAR_COLORS, DEFAULT_AVATAR_COLOR } from '../utils/avatarColors';
 import { base64ToArrayBuffer } from '../utils/base64ToBytes';
 import { fontSize, spacing, borderRadius, shadowCard, fonts, type AppColors } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
+import { snoozeInvitePromptAfterShare } from '../hooks/useInvitePrompt';
+import { shareInvite } from '../utils/share';
 
 const DISPLAY_NAME_CHANGES_PER_WEEK = 2;
 const DISPLAY_NAME_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -139,6 +142,14 @@ function nextAvailableChange(history: string[] | null | undefined): Date | null 
 export default function ProfileScreen() {
   const { colors, mode, setMode } = useTheme();
   const { user, signOut, deleteAccount } = useAuth();
+  const { show: showToast } = useToast();
+
+  async function handleInvite() {
+    const outcome = await shareInvite();
+    if (outcome === 'dismissed') return;
+    snoozeInvitePromptAfterShare();
+    if (outcome === 'copied') showToast({ message: 'Copied. Paste it to a friend.', icon: 'copy' });
+  }
   const [deleting, setDeleting] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_AVATAR_COLOR);
@@ -503,6 +514,28 @@ export default function ProfileScreen() {
         <UserStatsPanel userId={user?.id} />
       </View>
 
+      <View style={[styles.section, styles.inviteSection]}>
+        <View style={styles.inviteHeader}>
+          <View style={styles.inviteIcon}>
+            <Ionicons name="people" size={22} color={colors.accent} />
+          </View>
+          <View style={styles.inviteTextWrap}>
+            <Text style={styles.inviteTitle}>Invite a friend</Text>
+            <Text style={styles.inviteDesc}>
+              Every student who joins is one more set of eyes protecting cars from getting booted.
+            </Text>
+          </View>
+        </View>
+        <Pressable
+          style={({ pressed }) => [styles.inviteButton, pressed && styles.inviteButtonPressed]}
+          onPress={() => void handleInvite()}
+          accessibilityRole="button"
+        >
+          <Ionicons name="share-outline" size={18} color={colors.textInverse} />
+          <Text style={styles.inviteButtonText}>Share BootWatch</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Display name</Text>
         {editingName ? (
@@ -809,6 +842,56 @@ function createStyles(colors: AppColors) {
     borderWidth: 1,
     borderColor: colors.border,
     ...shadowCard,
+  },
+  inviteSection: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+    gap: spacing.md,
+  },
+  inviteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  inviteIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteTextWrap: {
+    flex: 1,
+  },
+  inviteTitle: {
+    fontSize: fontSize.lg,
+    fontFamily: fonts.displayBold,
+    color: colors.text,
+  },
+  inviteDesc: {
+    fontSize: fontSize.sm,
+    fontFamily: fonts.body,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  inviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    minHeight: 44,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary,
+  },
+  inviteButtonPressed: {
+    opacity: 0.75,
+  },
+  inviteButtonText: {
+    fontSize: fontSize.md,
+    fontFamily: fonts.display,
+    color: colors.textInverse,
   },
   sectionTitle: {
     fontSize: fontSize.sm,
