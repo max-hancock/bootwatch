@@ -1,7 +1,6 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Complex } from '../types/complex';
-import RiskBadge from './RiskBadge';
 import { fontSize, spacing, borderRadius, shadowFloat } from '../theme';
 import { fonts } from '../theme/fonts';
 import { useTheme } from '../context/ThemeContext';
@@ -23,6 +22,11 @@ interface Props {
   isSaved?: boolean;
   onToggleSave?: (complex: Complex) => void;
   sightingCount?: number;
+  /**
+   * Label and colour of this complex's pin as the map is currently showing it
+   * (visitor limit, or booter activity), so the sheet always matches the pin tapped.
+   */
+  pinBadge?: { label: string; color: string } | null;
 }
 
 function formatTimeAgo(date: Date): string {
@@ -46,6 +50,7 @@ export default function ComplexDetailSheet({
   isSaved,
   onToggleSave,
   sightingCount,
+  pinBadge,
 }: Props) {
   const { colors } = useTheme();
   const { stats } = useComplexSightingPatterns(complex?.id ?? null, visible && !!complex);
@@ -94,7 +99,12 @@ export default function ComplexDetailSheet({
             <Text style={styles.name} numberOfLines={2}>
               {complex.name}
             </Text>
-            <RiskBadge level={complex.riskLevel} />
+            {pinBadge && (
+              <View style={[styles.pinBadge, { backgroundColor: `${pinBadge.color}22` }]}>
+                <View style={[styles.pinBadgeDot, { backgroundColor: pinBadge.color }]} />
+                <Text style={[styles.pinBadgeText, { color: pinBadge.color }]}>{pinBadge.label}</Text>
+              </View>
+            )}
           </View>
 
           <Text style={styles.address}>{complex.address}</Text>
@@ -281,6 +291,24 @@ function createStyles(colors: import('../theme').AppColors) {
       height: 5,
       borderRadius: 3,
       backgroundColor: colors.border,
+    },
+    pinBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: borderRadius.full,
+    },
+    pinBadgeDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    pinBadgeText: {
+      fontSize: fontSize.xs,
+      fontFamily: fonts.bodyMedium,
     },
     header: {
       flexDirection: 'row',

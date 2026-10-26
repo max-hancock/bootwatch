@@ -54,6 +54,24 @@ export default function MapScreen() {
     return map;
   }, [mapMode, filtered, getEntry]);
 
+  // The detail sheet's badge mirrors the pin: same colour and meaning as the current map mode.
+  const pinBadge = useMemo(() => {
+    if (!selectedComplex) return null;
+    if (mapMode === 'heatmap') {
+      const level = getHeatLevel(getEntry(selectedComplex.id).count);
+      return { label: HEAT_LABELS[level], color: HEAT_COLORS[level] };
+    }
+    const { visitorTimeLimitMinutes: minutes, visitorLimitSignageKnown: signageKnown } = selectedComplex;
+    const label =
+      signageKnown === false
+        ? 'Limit unknown'
+        : minutes == null || minutes <= 0
+          ? 'No limit'
+          : // Used as an adjective: "2 hour limit", not "2 hours limit".
+            `${formatVisitorLimitMinutes(minutes).replace(/ hours$/, ' hour')} limit`;
+    return { label, color: getVisitorLimitMarkerColor(minutes, signageKnown) };
+  }, [selectedComplex, mapMode, getEntry]);
+
   const handleMarkerPress = useCallback((complex: Complex) => {
     setSelectedComplex(complex);
     setSheetVisible(true);
@@ -254,6 +272,7 @@ export default function MapScreen() {
 
       <ComplexDetailSheet
         complex={selectedComplex}
+        pinBadge={pinBadge}
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
         onParkHere={handleParkHere}
