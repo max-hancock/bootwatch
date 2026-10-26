@@ -29,6 +29,7 @@ already run, and aborts with a clear message if not.
 | 5 | `2026-10-08_reaction_notifications.sql` | SQL | Dedup table and the profile on/off switch for reaction notifications. Adds only. |
 | 6 | `notify-reaction` | Edge function | `npx supabase functions deploy notify-reaction --project-ref jrorzmwsqxynwbmuqsoq`. Leave **Verify JWT on**. Deploy after #5. |
 | 7 | `2026-10-26_sighting_rate_limit.sql` | SQL | Posting limits. Takes effect for every app version immediately, including the current App Store build. |
+| 8 | `2026-10-26_rename_university_view_to_the_grand.sql` | SQL | **Updates one row**: the complex's name in the database, which push notifications use. Fixes notifications for the current App Store build too, so it can be run early. |
 
 ## Check afterwards
 
@@ -41,8 +42,18 @@ select
   exists (select 1 from pg_proc where proname = 'leaderboard_all_time') as leaderboards, -- true
   exists (select 1 from pg_trigger where tgname = 'sightings_rate_limit') as rate_limit,  -- true
   (select count(*) from public.sightings
-     where is_anonymous is true and user_id is not null)     as anon_exposed;         -- 0
+     where is_anonymous is true and user_id is not null)     as anon_exposed,         -- 0
+  (select name from public.complexes where id = 'university-view') as grand_name; -- The Grand
 ```
+
+## Keeping complex names in sync
+
+Push notifications use the complex names stored in `public.complexes`, not
+the app's list. Whenever a complex is renamed or moved in
+`src/data/rexburg-housing.json`, regenerate with
+`node scripts/generate-complexes.mjs` and run
+`supabase/sync_complexes_from_app.sql` on dev and production, or add a
+targeted script here like #8.
 
 ## Already on production
 

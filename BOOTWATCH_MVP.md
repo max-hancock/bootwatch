@@ -50,7 +50,7 @@ A curated, manually-researched database of Rexburg apartment complexes including
 - Push notifications only for saved locations (avoids notification fatigue)
 - Reports include timestamp, location, and optional photo evidence
 
-> **Why P0**: This is the viral engine. A notification saying "Booter seen at University View!" gets screenshotted and shared in group chats. Works with even 5-10 active users.
+> **Why P0**: This is the viral engine. A notification saying "Booter seen at The Grand!" gets screenshotted and shared in group chats. Works with even 5-10 active users.
 
 ### P1 — Post-Launch (Weeks 2-3)
 

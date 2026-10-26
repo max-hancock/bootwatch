@@ -317,7 +317,7 @@ The `EXPO_PUBLIC_` prefix is an Expo convention that makes these values accessib
 - **30 min–2 hours** → Yellow border, yellow timestamp, "RECENT" badge — still relevant
 - **2+ hours** → Muted gray text, no badge — stale but historically useful
 
-**Narrative format**: Cards read like community posts — "MaxH spotted a booter at The Cove" or "MaxH got booted at University View" — with avatar initials colored by user's chosen color.
+**Narrative format**: Cards read like community posts — "MaxH spotted a booter at The Cove" or "MaxH got booted at The Grand" — with avatar initials colored by user's chosen color.
 
 **Real-time**: New sightings from other users appear instantly in the feed via Supabase Realtime subscriptions. Pull-to-refresh is available as fallback.
 

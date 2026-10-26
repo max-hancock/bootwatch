@@ -310,7 +310,7 @@ insert into public.complexes (id, name, address, latitude, longitude, visitor_ti
   ('the-cove', 'The Cove', '398 S 2nd W, Rexburg, ID', 43.8225, -111.7915, 30, 'University Parking Enforcement', 'sneaky', 'high', 'Very aggressive enforcement, especially evenings and weekends.'),
   ('nauvoo-house', 'Nauvoo House', '321 S 3rd W, Rexburg, ID', 43.8218, -111.7928, 30, 'University Parking Enforcement', 'moderate', 'high', 'Frequent booting reports. Signage exists but is easy to miss.'),
   ('alpine-chalet', 'Alpine Chalet', '460 S 2nd W, Rexburg, ID', 43.8215, -111.7912, 60, 'University Parking Enforcement', 'well-marked', 'moderate', 'Longer time limit but still actively patrolled.'),
-  ('university-view', 'University View', '280 S 1st W, Rexburg, ID', 43.8235, -111.7895, 30, 'University Parking Enforcement', 'sneaky', 'high', 'One of the most booted complexes in Rexburg.'),
+  ('university-view', 'The Grand', '280 S 1st W, Rexburg, ID', 43.8235, -111.7895, 30, 'University Parking Enforcement', 'sneaky', 'high', 'One of the most booted complexes in Rexburg.'),
   ('brookside', 'Brookside Village', '415 S 3rd W, Rexburg, ID', 43.8210, -111.7930, 45, 'Idaho Booting LLC', 'moderate', 'moderate', 'Moderate enforcement. Signs posted at lot entrances.'),
   ('mesa-falls', 'Mesa Falls', '520 S 2nd E, Rexburg, ID', 43.8200, -111.7870, 30, 'Idaho Booting LLC', 'sneaky', 'high', 'Small lot with limited visitor spots. Boots happen fast.'),
   ('hemming-village', 'Hemming Village', '316 Main St, Rexburg, ID', 43.8260, -111.7885, 120, null, 'well-marked', 'low', 'Downtown area with more relaxed parking enforcement.'),
