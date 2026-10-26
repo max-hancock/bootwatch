@@ -230,6 +230,13 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
     setSubmitting(false);
 
     if (error) {
+      // Over the posting limit (supabase/2026-10-26_sighting_rate_limit.sql): the
+      // database message is written for users, so show it on its own.
+      if (error.hint === 'rate_limited') {
+        if (Platform.OS === 'web') alert(`Slow down a little\n\n${error.message}`);
+        else Alert.alert('Slow down a little', error.message);
+        return;
+      }
       console.error('[ReportSighting] insert failed', error);
       const fk =
         error.code === '23503' ||
