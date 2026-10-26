@@ -64,6 +64,12 @@ release.
 
 ## Before cutting a release
 
+- **Production database and edge functions.** `supabase/PROD_PENDING.md`
+  lists every SQL file and edge function deploy that has been run on dev but
+  not yet on production, in the order to run them. Work through it when the
+  release ships. Whenever you add a migration or change an edge function and
+  it is run on dev only, add it to that file in the same change.
+
 - **App Store Connect URLs.** The GitHub account was renamed from
   `MaximusHancockimus` to `max-hancock` (2026-09-16). The privacy policy and
   support URLs in App Store Connect point at the public repo so users can read
