@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -13,6 +13,8 @@ import { fontSize, fontWeight, spacing, borderRadius, shadowFloat, shadowCard, f
 import { useTheme } from '../context/ThemeContext';
 import { formatVisitorLimitMinutes } from '../utils/parkingDisplay';
 import { VISITOR_LIMIT_LEGEND, getVisitorLimitMarkerColor } from '../utils/visitorLimitColors';
+import { LIVE_RED, getLiveMarkers } from '../utils/liveSightings';
+import type { MapFitTarget } from '../components/NativeMap';
 
 let NativeMap: any = null;
 let WebMap: any = null;
@@ -35,7 +37,18 @@ export default function MapScreen() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reportInitialComplexId, setReportInitialComplexId] = useState<string | null>(null);
   const navigation = useNavigation<any>();
-  const { getLatestSighting, error: sightingsError, refresh: refreshSightings } = useSightings();
+  const { sightings, getLatestSighting, error: sightingsError, refresh: refreshSightings } = useSightings();
+  const [fitTarget, setFitTarget] = useState<MapFitTarget | null>(null);
+
+  // Live layer: complexes with a report in the last hour, on top of either map mode.
+  // Ticks every 30s so the minute labels and the fading stay current and old ones drop off.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const live = useMemo(() => getLiveMarkers(sightings, now), [sightings, now]);
+  const liveComplexes = useMemo(() => complexes.filter((c) => live.has(c.id)), [live]);
   const { isSaved, toggle: toggleSave } = useSavedComplexes();
   const { getEntry, error: heatError, refresh: refreshHeat } = useHeatData();
 
@@ -78,6 +91,25 @@ export default function MapScreen() {
     setPanelExpanded(false);
   }, []);
 
+  // Tapping the red pill focuses on live reports: every other pin fades back and the map
+  // zooms to fit the ones with a recent report. Tapping it again brings the rest back.
+  const [liveFocus, setLiveFocus] = useState(false);
+  useEffect(() => {
+    if (liveComplexes.length === 0) setLiveFocus(false);
+  }, [liveComplexes.length]);
+
+  const handleLiveBannerPress = useCallback(() => {
+    if (liveFocus) {
+      setLiveFocus(false);
+      return;
+    }
+    setLiveFocus(true);
+    setFitTarget({
+      points: liveComplexes.map((c) => ({ latitude: c.latitude, longitude: c.longitude })),
+      key: Date.now(),
+    });
+  }, [liveFocus, liveComplexes]);
+
   const handleParkHere = useCallback(
     (complex: Complex) => {
       setSheetVisible(false);
@@ -104,9 +136,23 @@ export default function MapScreen() {
       {/* Map fills the screen */}
       <View style={styles.mapWrapper}>
         {Platform.OS === 'web' && WebMap ? (
-          <WebMap complexes={filtered} onMarkerPress={handleMarkerPress} colorOverrides={heatColorOverrides} />
+          <WebMap
+            complexes={filtered}
+            onMarkerPress={handleMarkerPress}
+            colorOverrides={heatColorOverrides}
+            live={live}
+            dimOthers={liveFocus}
+            fitTarget={fitTarget}
+          />
         ) : NativeMap ? (
-          <NativeMap complexes={filtered} onMarkerPress={handleMarkerPress} colorOverrides={heatColorOverrides} />
+          <NativeMap
+            complexes={filtered}
+            onMarkerPress={handleMarkerPress}
+            colorOverrides={heatColorOverrides}
+            live={live}
+            dimOthers={liveFocus}
+            fitTarget={fitTarget}
+          />
         ) : null}
       </View>
 
@@ -164,10 +210,28 @@ export default function MapScreen() {
             </Text>
           </Pressable>
         </View>
+
+        {/* Says what was reported, not that anywhere is clear: no report doesn't mean no truck. */}
+        {liveComplexes.length > 0 && (
+          <Pressable
+            style={({ pressed }) => [styles.liveBanner, pressed && styles.liveBannerPressed]}
+            onPress={handleLiveBannerPress}
+            accessibilityRole="button"
+            accessibilityState={{ selected: liveFocus }}
+            accessibilityHint={liveFocus ? 'Shows all complexes again' : 'Highlights them on the map'}
+          >
+            <View style={styles.liveDot} />
+            <Text style={styles.liveBannerText} numberOfLines={1}>
+              {liveComplexes.length === 1 ? '1 report' : `${liveComplexes.length} reports`} in the last hour
+              {liveFocus ? ' · Show all' : ''}
+            </Text>
+            <Ionicons name={liveFocus ? 'close' : 'chevron-forward'} size={14} color="#FFFFFF" />
+          </Pressable>
+        )}
       </View>
 
       {/* Map key — visitor limits (complexes) or activity tiers (booter activity); collapsible */}
-      <View style={styles.legend}>
+      <View style={[styles.legend, liveComplexes.length > 0 && styles.legendBelowLive]}>
         <Pressable
           style={styles.legendHeader}
           onPress={() => setMapLegendExpanded((e) => !e)}
@@ -544,6 +608,36 @@ function createStyles(colors: any) {
   cardMetaText: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
+  },
+  liveBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs + 2,
+    marginTop: spacing.sm,
+    paddingVertical: 5,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: LIVE_RED,
+    ...shadowCard,
+  },
+  liveBannerPressed: {
+    opacity: 0.85,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  liveBannerText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.xs,
+    fontFamily: fonts.bodyMedium,
+  },
+  // The live banner sits under the mode toggle, so the map key moves down to clear it.
+  legendBelowLive: {
+    top: 158,
   },
   errorBanner: {
     position: 'absolute',

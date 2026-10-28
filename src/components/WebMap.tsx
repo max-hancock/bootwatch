@@ -3,6 +3,8 @@ import { Loader } from '@googlemaps/js-api-loader';
 import { Complex } from '../types/complex';
 import { getVisitorLimitMarkerColor } from '../utils/visitorLimitColors';
 import { REXBURG_CENTER } from '../data/complexes';
+import { LiveMarker } from '../utils/liveSightings';
+import type { MapFitTarget } from './NativeMap';
 
 /** Distinct from risk pins (green/yellow/red) so "you are here" is obvious. */
 const USER_LOCATION_BLUE = '#2563EB';
@@ -19,6 +21,11 @@ interface Props {
   complexes: Complex[];
   onMarkerPress: (complex: Complex) => void;
   colorOverrides?: Map<string, string>;
+  /** Complexes with a report in the last hour, keyed by complex id. */
+  live?: Map<string, LiveMarker>;
+  /** Fade every pin that isn't live, so the ones with a recent report stand out. */
+  dimOthers?: boolean;
+  fitTarget?: MapFitTarget | null;
 }
 
 function buildPinSvg(color: string): string {
@@ -36,7 +43,7 @@ function buildPinSvg(color: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-export default function WebMap({ complexes, onMarkerPress, colorOverrides }: Props) {
+export default function WebMap({ complexes, onMarkerPress, colorOverrides, live, dimOthers, fitTarget }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
@@ -122,10 +129,14 @@ export default function WebMap({ complexes, onMarkerPress, colorOverrides }: Pro
       const color =
         colorOverrides?.get(complex.id) ??
           getVisitorLimitMarkerColor(complex.visitorTimeLimitMinutes, complex.visitorLimitSignageKnown);
+      const liveInfo = live?.get(complex.id);
       const marker = new google.maps.Marker({
         position: { lat: complex.latitude, lng: complex.longitude },
         map,
         title: complex.name,
+        // Live pins sit on top so a recent report is never hidden under a neighbour.
+        zIndex: liveInfo ? 1000 : undefined,
+        opacity: dimOthers && !liveInfo ? 0.25 : 1,
         icon: {
           url: buildPinSvg(color),
           scaledSize: new google.maps.Size(36, 44),
@@ -135,7 +146,21 @@ export default function WebMap({ complexes, onMarkerPress, colorOverrides }: Pro
       marker.addListener('click', () => onMarkerPress(complex));
       markersRef.current.push(marker);
     });
-  }, [complexes, onMarkerPress, colorOverrides, mapReady]);
+  }, [complexes, onMarkerPress, colorOverrides, live, dimOthers, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !fitTarget || fitTarget.points.length === 0) return;
+    if (fitTarget.points.length === 1) {
+      const [p] = fitTarget.points;
+      map.panTo({ lat: p.latitude, lng: p.longitude });
+      map.setZoom(17);
+      return;
+    }
+    const bounds = new google.maps.LatLngBounds();
+    fitTarget.points.forEach((p) => bounds.extend({ lat: p.latitude, lng: p.longitude }));
+    map.fitBounds(bounds, { top: 220, right: 60, bottom: 160, left: 60 });
+  }, [fitTarget, mapReady]);
 
   return (
     <div
