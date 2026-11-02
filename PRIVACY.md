@@ -21,7 +21,7 @@ When you create an account, we collect:
 
 - **Email address** — used as your login identifier and for password reset. Provided by you directly, or shared by Apple / Google when you use Sign in with Apple or Sign in with Google.
 - **Display name (optional)** — a name you choose to show on your sighting reports. You can leave this blank to stay anonymous.
-- **Avatar** — a stylized color-based avatar generated from your user ID. No personal photo is required.
+- **Avatar** — a colored avatar with your initial, or an optional profile photo you upload. A profile photo is shown publicly next to your name (feed, Ranks, profile card). No personal photo is required.
 
 Sign in with Apple may return a private relay email (`@privaterelay.appleid.com`) instead of your real email; that is fully supported.
 
@@ -49,7 +49,8 @@ When you submit a sighting (a report that enforcement is active at a complex), w
 ### Photos
 
 - If you attach a photo to a sighting, it is uploaded to our backend and shown in the public sightings feed.
-- The app only accesses photos you explicitly pick via the iOS/Android photo picker. We do not scan your photo library.
+- The app only accesses photos you explicitly pick via the iOS/Android photo picker, or take with the camera when filing a report. We do not scan your photo library.
+- **Reporting photos**: you can report a sighting photo or profile photo. We store who reported it, the photo, the reason and the time, so we can review it. A photo reported by more than one person is hidden until reviewed; photos that break the rules are deleted. Reporters are never shown to the photo's owner.
 
 ### Diagnostic and crash data
 
@@ -58,7 +59,7 @@ When you submit a sighting (a report that enforcement is active at a complex), w
 
 ### Information we do NOT collect
 
-- We do not collect contacts, microphone, camera (beyond the photo picker you initiate), health data, financial data, browsing history, or any advertising identifiers.
+- We do not collect contacts, microphone, camera (beyond photos you choose to take or pick for a report or profile), health data, financial data, browsing history, or any advertising identifiers.
 - We do not use third-party analytics or advertising SDKs.
 
 ## How we use data

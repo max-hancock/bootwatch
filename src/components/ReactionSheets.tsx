@@ -7,6 +7,7 @@ import { EXTRA_REACTIONS, reactionEmoji } from '../utils/reactions';
 import { DEFAULT_AVATAR_COLOR } from '../utils/avatarColors';
 import { useTheme } from '../context/ThemeContext';
 import { fontSize, spacing, borderRadius, shadowFloat, fonts, type AppColors } from '../theme';
+import { useHiddenPhotos } from '../hooks/useReportPhoto';
 
 /** Grid of the extra emoji behind the "+" on a feed card. */
 export function EmojiPickerModal({
@@ -70,6 +71,7 @@ interface Reactor {
  */
 export function ReactorsModal({ sightingId, onClose }: { sightingId: string | null; onClose: () => void }) {
   const { colors } = useTheme();
+  const { isHidden: isPhotoHidden } = useHiddenPhotos();
   const styles = createStyles(colors);
   const [reactors, setReactors] = useState<Reactor[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -118,7 +120,7 @@ export function ReactorsModal({ sightingId, onClose }: { sightingId: string | nu
               {reactors.map((r, i) => (
                 <View key={`${r.display_name}-${r.kind}-${i}`} style={styles.row}>
                   <View style={[styles.avatar, { backgroundColor: r.avatar_color ?? DEFAULT_AVATAR_COLOR }]}>
-                    {r.avatar_url ? (
+                    {r.avatar_url && !isPhotoHidden(r.avatar_url) ? (
                       <Image source={{ uri: r.avatar_url }} style={styles.avatarImage} resizeMode="cover" />
                     ) : (
                       <Text style={styles.avatarText}>{r.display_name.charAt(0).toUpperCase()}</Text>

@@ -31,6 +31,7 @@ import { fonts } from '../theme/fonts';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { shareSighting } from '../utils/share';
+import { useHiddenPhotos, useReportPhoto } from '../hooks/useReportPhoto';
 
 const BOOTWATCH_EMPTY = require('../../assets/android-icon-monochrome.png');
 
@@ -70,7 +71,8 @@ export default function FeedScreen() {
   const route = useRoute<any>();
   const [reportVisible, setReportVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
+  /** Sighting whose photo is open full-screen. */
+  const [lightbox, setLightbox] = useState<{ uri: string; sightingId: string; canReport: boolean } | null>(null);
   /** Sighting the "+" emoji picker is open for. */
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   /** Own sighting whose "who reacted" list is open. */
@@ -78,8 +80,26 @@ export default function FeedScreen() {
   /** User whose profile card is open (tapped from a named report). */
   const [profileFor, setProfileFor] = useState<string | null>(null);
 
-  const openLightbox = useCallback((uri: string) => setLightboxUri(uri), []);
-  const closeLightbox = useCallback(() => setLightboxUri(null), []);
+  const closeLightbox = useCallback(() => setLightbox(null), []);
+  const { isHidden: isPhotoHidden, version: hiddenVersion } = useHiddenPhotos();
+  const reportPhoto = useReportPhoto();
+
+  const openLightbox = useCallback(
+    (item: Sighting) => {
+      if (!item.photo_url) return;
+      const own = !!user && (item.user_id === user.id || isOwnSighting(item.id));
+      setLightbox({ uri: item.photo_url, sightingId: item.id, canReport: !own });
+    },
+    [user, isOwnSighting],
+  );
+
+  const handleReportPhoto = useCallback(
+    async (item: Sighting) => {
+      if (!item.photo_url) return;
+      if (await reportPhoto('sighting', item.id, item.photo_url)) setLightbox(null);
+    },
+    [reportPhoto],
+  );
 
   // Opened from the "Seen a booter recently?" prompt — go straight to the report sheet.
   const openReportParam = route.params?.openReport;
@@ -136,14 +156,19 @@ export default function FeedScreen() {
   }, [toggleReaction]);
 
   const renderSighting = useCallback(
-    ({ item }: { item: Sighting }) => (
+    ({ item }: { item: Sighting }) => {
+      const isOwn = !!user && (item.user_id === user.id || isOwnSighting(item.id));
+      return (
       <SightingCard
         item={item}
         styles={styles}
         colors={colors}
-        isOwn={!!user && (item.user_id === user.id || isOwnSighting(item.id))}
+        isOwn={isOwn}
+        photoHidden={isPhotoHidden(item.photo_url)}
+        avatarHidden={isPhotoHidden(item.avatar_url)}
         onDelete={handleDelete}
         onPhotoPress={openLightbox}
+        onReportPhoto={handleReportPhoto}
         hasReacted={hasReacted}
         onReact={handleReact}
         onOpenPicker={setPickerFor}
@@ -151,8 +176,9 @@ export default function FeedScreen() {
         onProfilePress={setProfileFor}
         onShare={handleShare}
       />
-    ),
-    [styles, colors, user, isOwnSighting, handleDelete, openLightbox, hasReacted, handleReact, handleShare],
+      );
+    },
+    [styles, colors, user, isOwnSighting, handleDelete, openLightbox, hasReacted, handleReact, handleShare, isPhotoHidden, handleReportPhoto],
   );
 
   if (loading && sightings.length === 0) {
@@ -191,6 +217,7 @@ export default function FeedScreen() {
         data={sightings}
         keyExtractor={(item) => item.id}
         renderItem={renderSighting}
+        extraData={hiddenVersion}
         contentContainerStyle={sightings.length === 0 ? styles.emptyContainer : styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
         ListHeaderComponent={
@@ -236,7 +263,18 @@ export default function FeedScreen() {
         onClose={() => setReportVisible(false)}
         onSuccess={refresh}
       />
-      <PhotoLightbox imageUri={lightboxUri} onClose={closeLightbox} />
+      <PhotoLightbox
+        imageUri={lightbox?.uri ?? null}
+        onClose={closeLightbox}
+        onReport={
+          lightbox?.canReport
+            ? () => {
+                const item = sightings.find((s) => s.id === lightbox.sightingId);
+                if (item) void handleReportPhoto(item);
+              }
+            : undefined
+        }
+      />
       <EmojiPickerModal
         visible={pickerFor !== null}
         onClose={() => setPickerFor(null)}
@@ -258,8 +296,11 @@ const SightingCard = React.memo(function SightingCard({
   styles,
   colors,
   isOwn,
+  photoHidden,
+  avatarHidden,
   onDelete,
   onPhotoPress,
+  onReportPhoto,
   hasReacted,
   onReact,
   onOpenPicker,
@@ -271,8 +312,12 @@ const SightingCard = React.memo(function SightingCard({
   styles: ReturnType<typeof createStyles>;
   colors: import('../theme').AppColors;
   isOwn: boolean;
+  /** This user reported the photo, so it's hidden for them. */
+  photoHidden: boolean;
+  avatarHidden: boolean;
   onDelete: (id: string) => void;
-  onPhotoPress: (uri: string) => void;
+  onPhotoPress: (item: Sighting) => void;
+  onReportPhoto: (item: Sighting) => void;
   hasReacted: (id: string, kind: ReactionKind) => boolean;
   onReact: (id: string, kind: ReactionKind) => void;
   onOpenPicker: (id: string) => void;
@@ -301,7 +346,7 @@ const SightingCard = React.memo(function SightingCard({
     ? 'shield-checkmark'
     : null;
 
-  const showAvatarPhoto = !item.is_anonymous && !!item.avatar_url;
+  const showAvatarPhoto = !item.is_anonymous && !!item.avatar_url && !avatarHidden;
   const profileUserId = !item.is_anonymous ? item.user_id : null;
 
   const tsStyle = isActive ? styles.timestampActive : isRecent ? styles.timestampRecent : undefined;
@@ -378,12 +423,18 @@ const SightingCard = React.memo(function SightingCard({
           </Pressable>
         )}
       </View>
-      {item.photo_url && (
+      {item.photo_url && !photoHidden && (
         <Pressable
-          onPress={() => onPhotoPress(item.photo_url!)}
+          onPress={() => onPhotoPress(item)}
+          // Long-press (or the VoiceOver action) reports it; the full-size view has a button too.
+          onLongPress={isOwn ? undefined : () => onReportPhoto(item)}
           style={({ pressed }) => [styles.photoPressable, pressed && styles.photoPressablePressed]}
           accessibilityLabel="View full-size photo"
           accessibilityRole="imagebutton"
+          accessibilityActions={isOwn ? undefined : [{ name: 'report', label: 'Report photo' }]}
+          onAccessibilityAction={(e) => {
+            if (e.nativeEvent.actionName === 'report') onReportPhoto(item);
+          }}
         >
           <Image source={{ uri: item.photo_url }} style={styles.photo} resizeMode="cover" />
         </Pressable>

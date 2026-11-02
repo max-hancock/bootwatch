@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import UserStatsPanel, { UserStats } from './UserStatsPanel';
 import { DEFAULT_AVATAR_COLOR } from '../utils/avatarColors';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { useHiddenPhotos, useReportPhoto } from '../hooks/useReportPhoto';
 import { fontSize, spacing, borderRadius, shadowFloat, fonts, type AppColors } from '../theme';
 
 interface Props {
@@ -26,7 +28,17 @@ export default function UserProfileCard({ userId, onClose, preview }: Props) {
 
   const name = stats?.display_name ?? preview?.display_name ?? 'BootWatch user';
   const avatarColor = stats?.avatar_color ?? preview?.avatar_color ?? DEFAULT_AVATAR_COLOR;
-  const avatarUrl = stats?.avatar_url ?? preview?.avatar_url ?? null;
+  const { user } = useAuth();
+  const { isHidden } = useHiddenPhotos();
+  const reportPhoto = useReportPhoto();
+  const rawAvatarUrl = stats?.avatar_url ?? preview?.avatar_url ?? null;
+  const avatarUrl = isHidden(rawAvatarUrl) ? null : rawAvatarUrl;
+  const canReport = !!avatarUrl && !!userId && userId !== user?.id;
+
+  const handleReport = async () => {
+    if (!avatarUrl || !userId) return;
+    if (await reportPhoto('avatar', userId, avatarUrl)) onClose();
+  };
 
   return (
     <Modal visible={userId !== null} transparent animationType="fade" onRequestClose={onClose}>
@@ -53,6 +65,19 @@ export default function UserProfileCard({ userId, onClose, preview }: Props) {
           <Text style={styles.name} numberOfLines={1}>
             {name}
           </Text>
+
+          {canReport && (
+            <Pressable
+              onPress={() => void handleReport()}
+              hitSlop={8}
+              style={styles.reportLink}
+              accessibilityRole="button"
+              accessibilityLabel="Report profile photo"
+            >
+              <Ionicons name="flag-outline" size={12} color={colors.textSecondary} />
+              <Text style={styles.reportLinkText}>Report photo</Text>
+            </Pressable>
+          )}
 
           <View style={styles.stats}>
             <UserStatsPanel userId={userId} onLoaded={setStats} />
@@ -122,6 +147,17 @@ function createStyles(colors: AppColors) {
     },
     stats: {
       alignSelf: 'stretch',
+    },
+    reportLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: spacing.xs,
+    },
+    reportLinkText: {
+      fontSize: fontSize.xs,
+      fontFamily: fonts.body,
+      color: colors.textSecondary,
     },
   });
 }

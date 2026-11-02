@@ -18,9 +18,11 @@ import { useTheme } from '../context/ThemeContext';
 interface Props {
   imageUri: string | null;
   onClose: () => void;
+  /** Shows a "Report" button (not for the viewer's own photos). */
+  onReport?: () => void;
 }
 
-export default function PhotoLightbox({ imageUri, onClose }: Props) {
+export default function PhotoLightbox({ imageUri, onClose, onReport }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -74,9 +76,26 @@ export default function PhotoLightbox({ imageUri, onClose }: Props) {
             >
               <Ionicons name="close" size={24} color="#fff" />
             </Pressable>
-            <Text style={styles.hint} pointerEvents="none">
-              Tap to close
-            </Text>
+            {onReport ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.reportButton,
+                  { backgroundColor: colors.textSecondary + '40' },
+                  pressed && styles.closeButtonPressed,
+                ]}
+                onPress={onReport}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Report photo"
+              >
+                <Ionicons name="flag-outline" size={16} color="#fff" />
+                <Text style={styles.reportText}>Report</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.hint} pointerEvents="none">
+                Tap to close
+              </Text>
+            )}
           </View>
         </View>
       )}
@@ -121,6 +140,21 @@ const styles = StyleSheet.create({
   },
   closeButtonPressed: {
     opacity: 0.8,
+  },
+  reportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    height: 36,
+    borderRadius: 18,
+    zIndex: 2,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
+  },
+  reportText: {
+    fontSize: fontSize.sm,
+    fontFamily: fonts.bodyMedium,
+    color: '#fff',
   },
   hint: {
     flex: 1,

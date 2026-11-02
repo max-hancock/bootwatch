@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import ScreenGradientBackdrop from '../components/ScreenGradientBackdrop';
 import UserProfileCard from '../components/UserProfileCard';
+import { useHiddenPhotos } from '../hooks/useReportPhoto';
 import { DEFAULT_AVATAR_COLOR } from '../utils/avatarColors';
 import { fontSize, spacing, borderRadius, shadowCard, fonts, type AppColors } from '../theme';
 
@@ -28,6 +29,7 @@ type Scope = 'month' | 'all';
 
 export default function LeaderboardScreen() {
   const { colors } = useTheme();
+  const { isHidden: isPhotoHidden, version: hiddenVersion } = useHiddenPhotos();
   const styles = createStyles(colors);
   const { user } = useAuth();
   const [rows, setRows] = useState<LeaderboardRow[] | null>(null);
@@ -149,6 +151,7 @@ export default function LeaderboardScreen() {
             </Text>
           </View>
         }
+        extraData={hiddenVersion}
         renderItem={({ item }) => {
           const isMe = !!user && item.user_id === user.id;
           return (
@@ -162,7 +165,7 @@ export default function LeaderboardScreen() {
                 {MEDALS[item.place] ?? item.place}
               </Text>
               <View style={[styles.avatar, { backgroundColor: item.avatar_color ?? DEFAULT_AVATAR_COLOR }]}>
-                {item.avatar_url ? (
+                {item.avatar_url && !isPhotoHidden(item.avatar_url) ? (
                   <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} resizeMode="cover" />
                 ) : (
                   <Text style={styles.avatarText}>{item.display_name.charAt(0).toUpperCase()}</Text>

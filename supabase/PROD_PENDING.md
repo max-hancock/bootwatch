@@ -43,7 +43,8 @@ select
   exists (select 1 from pg_trigger where tgname = 'sightings_rate_limit') as rate_limit,  -- true
   (select count(*) from public.sightings
      where is_anonymous is true and user_id is not null)     as anon_exposed,         -- 0
-  (select name from public.complexes where id = 'university-view') as grand_name; -- The Grand
+  (select name from public.complexes where id = 'university-view') as grand_name, -- The Grand
+  exists (select 1 from pg_proc where proname = 'report_photo') as photo_reports;    -- true
 ```
 
 ## Keeping complex names in sync
@@ -62,3 +63,7 @@ For the record, so nothing is run twice:
 - `2026-10-04_hide_anonymous_sighting_authors.sql`
 - `2026-10-04_anonymous_sighting_photo_paths.sql`
 - `notify-sighting` edge function (sighting_authors lookup)
+- `2026-11-02_photo_reports.sql` (run on production 2026-11-02, ahead of the
+  v2.0 release; unused until v2.0 ships. **Not yet run on dev**: run it there
+  before testing Report photo. Once v2.0 is out, review reports using
+  `supabase/MODERATION.md`.)
