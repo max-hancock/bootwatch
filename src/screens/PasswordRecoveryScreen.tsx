@@ -79,7 +79,14 @@ export default function PasswordRecoveryScreen() {
           </View>
         )}
 
-        <Pressable style={styles.primaryButton} onPress={handleSubmit} disabled={loading}>
+        <Pressable
+          style={styles.primaryButton}
+          onPress={handleSubmit}
+          disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Update password"
+          accessibilityState={{ disabled: loading, busy: loading }}
+        >
           {loading ? (
             <ActivityIndicator color={colors.textInverse} />
           ) : (
@@ -87,7 +94,7 @@ export default function PasswordRecoveryScreen() {
           )}
         </Pressable>
 
-        <Pressable style={styles.secondaryButton} onPress={() => void signOut()} disabled={loading}>
+        <Pressable style={styles.secondaryButton} onPress={() => void signOut()} disabled={loading} accessibilityRole="button">
           <Text style={styles.secondaryButtonText}>Cancel and sign out</Text>
         </Pressable>
       </View>

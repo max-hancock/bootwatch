@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../utils/haptics';
+import { recordHappyMoment } from '../utils/storeReview';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useIsFocused, useRoute } from '@react-navigation/native';
 import { complexes, CUSTOM_TIMER_ID, getComplexById } from '../data/complexes';
@@ -21,6 +22,16 @@ const OWN_TIME_OPTIONS = [
   { label: '2 hours', minutes: 120 },
   { label: '4 hours', minutes: 240 },
 ];
+
+/** "12 minutes 5 seconds left", for VoiceOver (it reads "12:05" as a clock time). */
+function spokenTime(seconds: number): string {
+  if (seconds <= 0) return 'Time is up';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const part = (n: number, unit: string) => (n > 0 ? `${n} ${unit}${n === 1 ? '' : 's'}` : '');
+  return [part(h, 'hour'), part(m, 'minute'), h > 0 ? '' : part(s, 'second')].filter(Boolean).join(' ') + ' left';
+}
 
 function formatTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -131,13 +142,19 @@ export default function TimerScreen() {
 
   const handleStart = useCallback(() => {
     if (canStart) {
-      if (Platform.OS !== 'web') {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
+      haptics.medium();
       const complexId = selectedId !== CUSTOM_TIMER_ID ? selectedId ?? undefined : undefined;
       timer.start(durationMinutes, complexId, needsOwnTime);
     }
   }, [canStart, durationMinutes, selectedId, timer, needsOwnTime]);
+
+  const handleLeave = useCallback(() => {
+    haptics.medium();
+    // Left with time to spare on a posted limit: the app did its job.
+    const leftInTime = timer.isRunning && timer.phase !== 'expired';
+    void timer.cancel();
+    if (leftInTime) recordHappyMoment();
+  }, [timer]);
 
   const phaseColor = PHASE_COLORS[timer.phase];
 
@@ -184,6 +201,8 @@ export default function TimerScreen() {
 
         <Animated.Text
           style={[styles.countdown, { color: phaseColor, transform: [{ scale: tickAnim }] }]}
+          accessibilityLabel={spokenTime(timer.remainingSeconds)}
+          maxFontSizeMultiplier={1.2}
         >
           {formatTime(timer.remainingSeconds)}
         </Animated.Text>
@@ -245,7 +264,7 @@ export default function TimerScreen() {
           </Text>
         </Pressable>
 
-        <Pressable style={styles.cancelButton} onPress={timer.cancel}>
+        <Pressable style={styles.cancelButton} onPress={handleLeave} accessibilityRole="button">
           <Ionicons name="stop-circle-outline" size={22} color={colors.danger} />
           <Text style={styles.cancelButtonText}>
             {overLimit ? "I've left" : timer.phase === 'expired' ? 'Dismiss' : "I'm Leaving"}
@@ -261,6 +280,8 @@ export default function TimerScreen() {
       key={meters === undefined ? c.id : `near-${c.id}`}
       style={[styles.selectorItem, selectedId === c.id && styles.selectorItemActive]}
       onPress={() => pickComplex(c.id)}
+      accessibilityRole="button"
+      accessibilityState={{ selected: selectedId === c.id }}
     >
       <View
         style={[
@@ -299,6 +320,7 @@ export default function TimerScreen() {
           </Text>
           <Pressable
             onPress={dismissPushExplainer}
+            accessibilityRole="button"
             accessibilityLabel="Dismiss notification info"
             hitSlop={12}
             style={styles.pushExplainerClose}
@@ -310,7 +332,12 @@ export default function TimerScreen() {
 
       {/* Selected complex preview */}
       {selectedComplex && !showSelector && (
-        <Pressable style={styles.selectedCard} onPress={() => setShowSelector(true)}>
+        <Pressable
+          style={styles.selectedCard}
+          onPress={() => setShowSelector(true)}
+          accessibilityRole="button"
+          accessibilityHint="Choose a different complex"
+        >
           <View style={styles.selectedCardHeader}>
             <Text style={styles.selectedCardName} numberOfLines={2} ellipsizeMode="tail">
               {selectedComplex.name}
@@ -394,7 +421,7 @@ export default function TimerScreen() {
             />
             <Text style={styles.customInputLabel}>minutes</Text>
           </View>
-          <Pressable onPress={() => setShowSelector(true)}>
+          <Pressable onPress={() => setShowSelector(true)} accessibilityRole="button">
             <Text style={styles.changeText}>Select a complex instead</Text>
           </Pressable>
         </View>
@@ -415,7 +442,7 @@ export default function TimerScreen() {
               returnKeyType="search"
             />
             {search.length > 0 && (
-              <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear search">
+              <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search">
                 <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
               </Pressable>
             )}
@@ -434,6 +461,8 @@ export default function TimerScreen() {
             <Pressable
               style={[styles.selectorItem, selectedId === CUSTOM_TIMER_ID && styles.selectorItemActive]}
               onPress={() => pickComplex(CUSTOM_TIMER_ID)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: selectedId === CUSTOM_TIMER_ID }}
             >
               <Ionicons name="create-outline" size={20} color={colors.primary} />
               <Text style={styles.selectorItemText}>Custom Timer</Text>
@@ -458,6 +487,8 @@ export default function TimerScreen() {
             style={[styles.startButton, !canStart && styles.startButtonDisabled]}
             onPress={handleStart}
             disabled={!canStart}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canStart }}
           >
             <Ionicons name="timer" size={22} color={colors.textInverse} />
             <Text style={styles.startButtonText}>Start Timer</Text>

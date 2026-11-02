@@ -38,7 +38,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           <Text style={styles.subtitle}>
             The app ran into an unexpected error. Try restarting or tap below to retry.
           </Text>
-          <Pressable style={styles.retryButton} onPress={this.handleRetry}>
+          <Pressable style={styles.retryButton} onPress={this.handleRetry} accessibilityRole="button">
             <Ionicons name="refresh" size={20} color={colors.textInverse} />
             <Text style={styles.retryText}>Try Again</Text>
           </Pressable>

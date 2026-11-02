@@ -8,9 +8,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AccessibilityInfo, AppState, AppStateStatus } from 'react-native';
 import { useNotifications, type PermissionStatus } from '../hooks/useNotifications';
 import { supabase } from '../lib/supabase';
+import { endTimerActivity, markTimerActivityExpired, showTimerActivity } from '../lib/liveActivity';
+import { haptics } from '../utils/haptics';
 
 export type TimerPhase = 'idle' | 'running' | 'warning' | 'critical' | 'expired';
 
@@ -94,6 +96,7 @@ export function ParkingTimerProvider({ children }: { children: ReactNode }) {
         intervalRef.current = null;
       }
       endTimeRef.current = null;
+      void markTimerActivityExpired();
       if (!mounted.current) return;
       setParkingOverLimit(true);
       setState((prev) => ({
@@ -137,6 +140,7 @@ export function ParkingTimerProvider({ children }: { children: ReactNode }) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       if (!endTimeRef.current) {
+        void endTimerActivity();
         if (mounted.current) {
           setActiveComplexId(null);
           setParkingOverLimit(false);
@@ -152,6 +156,9 @@ export function ParkingTimerProvider({ children }: { children: ReactNode }) {
 
     if (error || !row) {
       if (!endTimeRef.current) {
+        // No server row and nothing counting here: the timer is over. (A timer
+        // with no complex has no row, but then endTimeRef is set while it runs.)
+        if (!error) void endTimerActivity();
         if (mounted.current) {
           setActiveComplexId(null);
           setParkingOverLimit(false);
@@ -179,6 +186,7 @@ export function ParkingTimerProvider({ children }: { children: ReactNode }) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      void markTimerActivityExpired();
       const rem = 0;
       const totalFromSession = totalSessionSeconds(endMs, createdMs, rem);
       if (mounted.current) {
@@ -197,6 +205,7 @@ export function ParkingTimerProvider({ children }: { children: ReactNode }) {
     const totalFromSession = totalSessionSeconds(endMs, createdMs, rem);
 
     endTimeRef.current = endMs;
+    void showTimerActivity(endMs, row.complex_id);
     if (mounted.current) {
       setParkingOverLimit(false);
       setState({
@@ -251,6 +260,7 @@ export function ParkingTimerProvider({ children }: { children: ReactNode }) {
         remainingSeconds: Math.min(totalSeconds, Math.max(0, remainingAligned)),
         isRunning: true,
       });
+      void showTimerActivity(endTime, complexId ?? null);
 
       if (complexId) {
         const { data: { user } } = await supabase.auth.getUser();
@@ -314,6 +324,7 @@ export function ParkingTimerProvider({ children }: { children: ReactNode }) {
     endTimeRef.current = null;
     setActiveComplexId(null);
     setParkingOverLimit(false);
+    void endTimerActivity();
     await cancelAllScheduled();
     setState({ phase: 'idle', totalSeconds: 0, remainingSeconds: 0, isRunning: false });
 
@@ -322,6 +333,27 @@ export function ParkingTimerProvider({ children }: { children: ReactNode }) {
       await supabase.from('active_timers').delete().eq('user_id', user.id);
     }
   }, [cancelAllScheduled]);
+
+  // Buzz when the countdown crosses a threshold while the app is open. Only
+  // from a counting phase, so opening the app or starting a timer stays quiet.
+  const prevPhase = useRef<TimerPhase>(state.phase);
+  useEffect(() => {
+    const prev = prevPhase.current;
+    prevPhase.current = state.phase;
+    if (prev === state.phase) return;
+    const counting = prev === 'running' || prev === 'warning' || prev === 'critical';
+    if (!counting) return;
+    if (state.phase === 'expired') {
+      haptics.error();
+      AccessibilityInfo.announceForAccessibility('Parking time is up');
+    } else if (state.phase === 'warning') {
+      haptics.warning();
+      AccessibilityInfo.announceForAccessibility('10 minutes of parking time left');
+    } else if (state.phase === 'critical') {
+      haptics.warning();
+      AccessibilityInfo.announceForAccessibility('5 minutes of parking time left');
+    }
+  }, [state.phase]);
 
   const value = useMemo<ParkingTimerContextValue>(
     () => ({

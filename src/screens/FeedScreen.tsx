@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../utils/haptics';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSightings } from '../hooks/useSightings';
 import { useAuth } from '../context/AuthContext';
@@ -98,6 +98,8 @@ export default function FeedScreen() {
   const handleDelete = useCallback((id: string) => {
     const confirmAndDelete = async () => {
       const { error: delError } = await deleteSighting(id);
+      if (delError) haptics.error();
+      else haptics.light();
       if (delError) {
         if (Platform.OS === 'web') alert(`Could not delete report.\n\n${delError}`);
         else Alert.alert('Could not delete', delError);
@@ -122,13 +124,14 @@ export default function FeedScreen() {
 
   const { show: showToast } = useToast();
   const handleShare = useCallback(async (item: Sighting) => {
+    haptics.light();
     const outcome = await shareSighting(item);
     // No share sheet (desktop browsers): the text went to the clipboard instead.
     if (outcome === 'copied') showToast({ message: 'Copied. Paste it in your group chat.', icon: 'copy' });
   }, [showToast]);
 
   const handleReact = useCallback((id: string, kind: ReactionKind) => {
-    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    haptics.select();
     void toggleReaction(id, kind);
   }, [toggleReaction]);
 

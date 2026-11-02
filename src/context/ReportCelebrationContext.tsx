@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useState, ReactNode } from 'react';
 import ReportCelebration, { CelebrationConfig } from '../components/ReportCelebration';
+import { recordHappyMoment } from '../utils/storeReview';
 
 interface ReportCelebrationApi {
   celebrate: (config: CelebrationConfig) => void;
@@ -14,7 +15,12 @@ export function ReportCelebrationProvider({ children }: { children: ReactNode })
     setCelebration(config);
   }, []);
 
-  const done = useCallback(() => setCelebration(null), []);
+  // A report just went out and the celebration has closed: a good moment to
+  // (rarely) ask for a rating. Not after "I got booted" — they're having a bad day.
+  const done = useCallback(() => {
+    if (celebration && celebration.reportType !== 'booted') recordHappyMoment();
+    setCelebration(null);
+  }, [celebration]);
 
   return (
     <ReportCelebrationContext.Provider value={{ celebrate }}>

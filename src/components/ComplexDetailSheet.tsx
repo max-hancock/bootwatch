@@ -1,5 +1,6 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { haptics } from '../utils/haptics';
 import { Complex } from '../types/complex';
 import { fontSize, spacing, borderRadius, shadowFloat } from '../theme';
 import { fonts } from '../theme/fonts';
@@ -171,7 +172,14 @@ export default function ComplexDetailSheet({
           {onToggleSave && (
             <Pressable
               style={[styles.followRow, isSaved && styles.followRowActive]}
-              onPress={() => onToggleSave(complex)}
+              onPress={() => {
+                haptics.select();
+                onToggleSave(complex);
+              }}
+              accessibilityRole="switch"
+              accessibilityLabel="Follow this complex"
+              accessibilityHint="Get push alerts when a boot truck is reported here"
+              accessibilityState={{ checked: !!isSaved }}
             >
               <Ionicons
                 name={isSaved ? 'notifications' : 'notifications-outline'}
@@ -204,7 +212,7 @@ export default function ComplexDetailSheet({
             </Pressable>
           )}
 
-          <Pressable style={styles.parkButton} onPress={() => onParkHere(complex)}>
+          <Pressable style={styles.parkButton} onPress={() => onParkHere(complex)} accessibilityRole="button">
             <Ionicons name="timer-outline" size={20} color={colors.textInverse} />
             <Text style={styles.parkButtonText}>Park here</Text>
           </Pressable>

@@ -479,6 +479,7 @@ export default function ProfileScreen() {
           onPress={handlePickAvatar}
           disabled={photoUploading}
           style={styles.avatarPressable}
+          accessibilityRole="button"
           accessibilityLabel={profile?.avatar_url ? 'Change profile photo' : 'Add profile photo'}
         >
           <View style={[styles.avatar, { backgroundColor: selectedColor }]}>
@@ -502,7 +503,7 @@ export default function ProfileScreen() {
         <Text style={styles.name}>{displayName}</Text>
         <Text style={styles.email}>{user?.email}</Text>
         {profile?.avatar_url && !photoUploading && (
-          <Pressable onPress={handleRemoveAvatar} hitSlop={8} style={styles.removePhotoButton}>
+          <Pressable onPress={handleRemoveAvatar} hitSlop={8} style={styles.removePhotoButton} accessibilityRole="button">
             <Text style={styles.removePhotoText}>Remove photo</Text>
           </Pressable>
         )}
@@ -552,7 +553,7 @@ export default function ProfileScreen() {
               editable={!nameSaving}
             />
             <View style={styles.nameEditActions}>
-              <Pressable onPress={handleCancelEditName} disabled={nameSaving} hitSlop={6}>
+              <Pressable onPress={handleCancelEditName} disabled={nameSaving} hitSlop={6} accessibilityRole="button">
                 <Text style={styles.nameCancelText}>Cancel</Text>
               </Pressable>
               <Pressable
@@ -563,6 +564,8 @@ export default function ProfileScreen() {
                   (nameSaving || !draftName.trim()) && styles.nameSaveButtonDisabled,
                 ]}
                 hitSlop={6}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: nameSaving || !draftName.trim(), busy: nameSaving }}
               >
                 <Text style={styles.nameSaveText}>{nameSaving ? 'Saving…' : 'Save'}</Text>
               </Pressable>
@@ -576,6 +579,9 @@ export default function ProfileScreen() {
               disabled={limitReached}
               style={[styles.editNameButton, limitReached && styles.editNameButtonDisabled]}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Edit display name"
+              accessibilityState={{ disabled: limitReached }}
             >
               <Ionicons
                 name="pencil"
@@ -611,8 +617,15 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Color</Text>
           <View style={styles.colorGrid}>
-            {AVATAR_COLORS.map((c) => (
-              <Pressable key={c} onPress={() => handleColorSelect(c)} style={styles.colorOption}>
+            {AVATAR_COLORS.map((c, i) => (
+              <Pressable
+                key={c}
+                onPress={() => handleColorSelect(c)}
+                style={styles.colorOption}
+                accessibilityRole="button"
+                accessibilityLabel={`Avatar color ${i + 1} of ${AVATAR_COLORS.length}`}
+                accessibilityState={{ selected: c === selectedColor }}
+              >
                 <View style={[styles.colorSwatch, { backgroundColor: c }]}>
                   {c === selectedColor && (
                     <Ionicons name="checkmark" size={18} color="#fff" />
@@ -633,6 +646,8 @@ export default function ProfileScreen() {
               key={opt}
               style={[styles.themeOption, mode === opt && styles.themeOptionActive]}
               onPress={() => setMode(opt)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: mode === opt }}
             >
               <Ionicons
                 name={opt === 'light' ? 'sunny-outline' : opt === 'dark' ? 'moon-outline' : 'phone-portrait-outline'}
@@ -660,6 +675,7 @@ export default function ProfileScreen() {
           <Switch
             value={nearbyAlerts}
             onValueChange={handleNearbyAlertsChange}
+            accessibilityLabel="Nearby sighting alerts"
             trackColor={{ false: colors.border, true: colors.primary }}
             thumbColor={colors.background}
             ios_backgroundColor={colors.border}
@@ -677,6 +693,7 @@ export default function ProfileScreen() {
             <Switch
               value={reactionAlerts}
               onValueChange={handleReactionAlertsChange}
+              accessibilityLabel="Reactions to my reports"
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor={colors.background}
               ios_backgroundColor={colors.border}
@@ -704,7 +721,12 @@ export default function ProfileScreen() {
               <View key={cx.id} style={styles.savedItem}>
                 <Ionicons name="notifications" size={18} color={colors.accent} />
                 <Text style={styles.savedItemText}>{cx.name}</Text>
-                <Pressable onPress={() => toggleComplex(cx.id)} hitSlop={8}>
+                <Pressable
+                  onPress={() => toggleComplex(cx.id)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Unfollow ${cx.name}`}
+                >
                   <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
                 </Pressable>
               </View>
@@ -715,7 +737,7 @@ export default function ProfileScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
-        <Pressable style={styles.menuItem} onPress={signOut}>
+        <Pressable style={styles.menuItem} onPress={signOut} accessibilityRole="button">
           <Ionicons name="log-out-outline" size={20} color={colors.danger} />
           <Text style={styles.menuItemTextDanger}>Sign Out</Text>
         </Pressable>
@@ -724,6 +746,8 @@ export default function ProfileScreen() {
           style={styles.menuItem}
           onPress={handleDeleteAccountPress}
           disabled={deleting}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: deleting, busy: deleting }}
         >
           {deleting ? (
             <ActivityIndicator size="small" color={colors.danger} />

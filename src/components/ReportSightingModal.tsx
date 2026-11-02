@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { ActionSheetIOS, ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../utils/haptics';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { complexes } from '../data/complexes';
@@ -230,6 +230,7 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
     setSubmitting(false);
 
     if (error) {
+      haptics.error();
       // Over the posting limit (supabase/2026-10-26_sighting_rate_limit.sql): the
       // database message is written for users, so show it on its own.
       if (error.hint === 'rate_limited') {
@@ -274,9 +275,7 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
             })
         : Promise.resolve(null);
       celebrate({ reportType, alerted });
-      if (Platform.OS !== 'web') {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
+      haptics.success();
       snoozeReportPrompt();
       const hadPhotoFailure =(!!photoUri || !!photoBase64) && !photoUrl;
       const failureReason = uploadReason;
@@ -323,7 +322,7 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
       <View style={styles.photoWarning}>
         <Ionicons name="warning-outline" size={18} color={colors.warning} />
         <Text style={styles.photoWarningText}>{photoWarning}</Text>
-        <Pressable onPress={() => setPhotoWarning(null)} hitSlop={8}>
+        <Pressable onPress={() => setPhotoWarning(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Dismiss photo warning">
           <Ionicons name="close" size={18} color={colors.textSecondary} />
         </Pressable>
       </View>
@@ -349,6 +348,8 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
               <Pressable
                 style={[styles.typeOption, reportType === 'spotter' && styles.typeOptionSelected]}
                 onPress={() => setReportType('spotter')}
+                accessibilityRole="button"
+                accessibilityState={{ selected: reportType === 'spotter' }}
               >
                 <Ionicons name="eye-outline" size={22} color={reportType === 'spotter' ? colors.warning : colors.textSecondary} />
                 <Text style={[styles.typeLabel, reportType === 'spotter' && styles.typeLabelSelected]}>
@@ -358,6 +359,8 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
               <Pressable
                 style={[styles.typeOption, reportType === 'booted' && styles.typeOptionBooted]}
                 onPress={() => setReportType('booted')}
+                accessibilityRole="button"
+                accessibilityState={{ selected: reportType === 'booted' }}
               >
                 <Ionicons name="lock-closed-outline" size={22} color={reportType === 'booted' ? colors.danger : colors.textSecondary} />
                 <Text style={[styles.typeLabel, reportType === 'booted' && styles.typeLabelBooted]}>
@@ -378,7 +381,7 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
                 autoCorrect={false}
               />
               {complexSearch.length > 0 && (
-                <Pressable onPress={() => setComplexSearch('')}>
+                <Pressable onPress={() => setComplexSearch('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search">
                   <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
                 </Pressable>
               )}
@@ -396,6 +399,8 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
                   key={c.id}
                   style={[styles.item, selectedComplexId === c.id && styles.itemSelected]}
                   onPress={() => setSelectedComplexId(c.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: selectedComplexId === c.id }}
                 >
                   <View
                     style={[
@@ -423,6 +428,8 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
                   key={opt.minutes}
                   style={[styles.timeChip, timeOffset === opt.minutes && styles.timeChipSelected]}
                   onPress={() => setTimeOffset(opt.minutes)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: timeOffset === opt.minutes }}
                 >
                   <Text style={[styles.timeChipText, timeOffset === opt.minutes && styles.timeChipTextSelected]}>
                     {opt.label}
@@ -431,7 +438,14 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
               ))}
             </View>
 
-            <Pressable style={styles.anonRow} onPress={() => setIsAnonymous((v) => !v)}>
+            <Pressable
+              style={styles.anonRow}
+              onPress={() => setIsAnonymous((v) => !v)}
+              accessibilityRole="switch"
+              accessibilityLabel="Post anonymously"
+              accessibilityHint="Your name won't appear on this report"
+              accessibilityState={{ checked: isAnonymous }}
+            >
               <View style={styles.anonLabel}>
                 <Ionicons name="shield-checkmark-outline" size={20} color={isAnonymous ? colors.primary : colors.textSecondary} />
                 <View>
@@ -444,7 +458,12 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
               </View>
             </Pressable>
 
-            <Pressable style={styles.photoButton} onPress={() => void promptPhotoSource()}>
+            <Pressable
+              style={styles.photoButton}
+              onPress={() => void promptPhotoSource()}
+              accessibilityRole="button"
+              accessibilityLabel={photoUri ? 'Change photo' : 'Add photo (optional)'}
+            >
               {photoUri ? (
                 <View>
                   <Image source={{ uri: photoUri }} style={styles.photoPreview} />
@@ -455,6 +474,7 @@ export default function ReportSightingModal({ visible, onClose, onSuccess, initi
                       clearPhoto();
                     }}
                     hitSlop={8}
+                    accessibilityRole="button"
                     accessibilityLabel="Remove photo"
                   >
                     <Ionicons name="close" size={16} color="#fff" />
@@ -870,7 +890,9 @@ function ReportSightingSubmitButton({
         style={[styles.submitButton, disabled && styles.submitButtonDisabled]}
         onPress={onSubmit}
         disabled={disabled}
-        accessibilityState={{ disabled }}
+        accessibilityRole="button"
+        accessibilityLabel="Report Sighting"
+        accessibilityState={{ disabled, busy: submitting }}
       >
         {submitting ? (
           <ActivityIndicator color={colors.textInverse} />

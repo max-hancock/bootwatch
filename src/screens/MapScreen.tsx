@@ -160,6 +160,7 @@ export default function MapScreen() {
         <Pressable
           style={styles.errorBanner}
           onPress={() => { refreshSightings(); refreshHeat(true); }}
+          accessibilityRole="button"
         >
           <Ionicons name="cloud-offline-outline" size={16} color={colors.textInverse} />
           <Text style={styles.errorBannerText}>Data unavailable — tap to retry</Text>
@@ -187,6 +188,8 @@ export default function MapScreen() {
           <Pressable
             style={[styles.modeButton, mapMode === 'complexes' && styles.modeButtonActive]}
             onPress={() => setMapMode('complexes')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: mapMode === 'complexes' }}
           >
             <Ionicons
               name="business-outline"
@@ -200,6 +203,8 @@ export default function MapScreen() {
           <Pressable
             style={[styles.modeButton, mapMode === 'heatmap' && styles.modeButtonActive]}
             onPress={() => setMapMode('heatmap')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: mapMode === 'heatmap' }}
           >
             <Ionicons name="flame-outline" size={14} color={mapMode === 'heatmap' ? colors.danger : colors.textSecondary} />
             <Text
@@ -266,7 +271,13 @@ export default function MapScreen() {
 
       {/* Collapsible bottom panel */}
       <View style={[styles.panel, panelExpanded && styles.panelExpanded]}>
-        <Pressable style={styles.panelHandle} onPress={() => setPanelExpanded(!panelExpanded)}>
+        <Pressable
+          style={styles.panelHandle}
+          onPress={() => setPanelExpanded(!panelExpanded)}
+          accessibilityRole="button"
+          accessibilityLabel={`${filtered.length} complex${filtered.length !== 1 ? 'es' : ''}, ${panelExpanded ? 'hide list' : 'show list'}`}
+          accessibilityState={{ expanded: panelExpanded }}
+        >
           <View style={styles.handleBar} />
           <View style={styles.panelHeaderRow}>
             <Text style={styles.panelTitle}>
@@ -290,7 +301,7 @@ export default function MapScreen() {
                 c.visitorLimitSignageKnown,
               );
               return (
-                <Pressable key={c.id} style={styles.card} onPress={() => handleMarkerPress(c)}>
+                <Pressable key={c.id} style={styles.card} onPress={() => handleMarkerPress(c)} accessibilityRole="button">
                   <View style={styles.cardHeader}>
                     <Text style={styles.cardName}>{c.name}</Text>
                     {mapMode === 'heatmap' ? (

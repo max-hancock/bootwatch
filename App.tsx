@@ -6,6 +6,7 @@ import { ActivityIndicator, Platform, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ParkingTimerProvider } from './src/context/ParkingTimerContext';
@@ -18,6 +19,7 @@ import AuthScreen from './src/screens/AuthScreen';
 import PasswordRecoveryScreen from './src/screens/PasswordRecoveryScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { TIMER_DEEP_LINK_PATH } from './src/lib/liveActivity';
 
 const ONBOARDING_KEY = '@bootwatch_onboarded';
 
@@ -104,8 +106,18 @@ export default function App() {
 
     const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
 
+    // Tapping the lock-screen timer opens bootwatch:///timer.
+    const handleUrl = (url: string | null) => {
+      if (!url) return;
+      const { hostname, path } = Linking.parse(url);
+      if (hostname === TIMER_DEEP_LINK_PATH || path === TIMER_DEEP_LINK_PATH) openScreen('Timer');
+    };
+    void Linking.getInitialURL().then(handleUrl);
+    const linkSub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+
     return () => {
       subscription.remove();
+      linkSub.remove();
       if (retry) clearTimeout(retry);
     };
   }, []);

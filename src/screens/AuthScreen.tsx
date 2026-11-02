@@ -116,6 +116,9 @@ export default function AuthScreen() {
           style={styles.oauthButton}
           onPress={handleGoogle}
           disabled={anyLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Continue with Google"
+          accessibilityState={{ disabled: anyLoading, busy: oauthLoading === 'google' }}
         >
           {oauthLoading === 'google' ? (
             <ActivityIndicator size="small" color={colors.text} />
@@ -132,6 +135,9 @@ export default function AuthScreen() {
             style={[styles.oauthButton, styles.appleButton]}
             onPress={handleApple}
             disabled={anyLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Apple"
+            accessibilityState={{ disabled: anyLoading, busy: oauthLoading === 'apple' }}
           >
             {oauthLoading === 'apple' ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
@@ -192,6 +198,7 @@ export default function AuthScreen() {
         {authMode === 'signIn' && (
           <Pressable
             style={styles.forgotLinkWrap}
+            accessibilityRole="link"
             onPress={() => {
               setAuthMode('forgotPassword');
               setError(null);
@@ -213,6 +220,9 @@ export default function AuthScreen() {
           style={styles.primaryButton}
           onPress={authMode === 'forgotPassword' ? handleForgotSubmit : handleSubmit}
           disabled={anyLoading || (authMode === 'forgotPassword' && forgotSent)}
+          accessibilityRole="button"
+          accessibilityLabel={authMode === 'forgotPassword' ? 'Send reset link' : authMode === 'signUp' ? 'Create Account' : 'Sign In'}
+          accessibilityState={{ disabled: anyLoading || (authMode === 'forgotPassword' && forgotSent), busy: loading }}
         >
           {loading ? (
             <ActivityIndicator color={colors.textInverse} />
@@ -231,6 +241,7 @@ export default function AuthScreen() {
               setError(null);
               setForgotSent(false);
             }}
+            accessibilityRole="link"
           >
             <Text style={styles.linkText}>Back to sign in</Text>
           </Pressable>
@@ -241,6 +252,7 @@ export default function AuthScreen() {
               setAuthMode((m) => (m === 'signUp' ? 'signIn' : 'signUp'));
               setError(null);
             }}
+            accessibilityRole="link"
           >
             <Text style={styles.linkText}>
               {authMode === 'signUp' ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}

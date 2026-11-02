@@ -174,13 +174,13 @@ export default function OnboardingScreen({ onComplete }: Props) {
           ))}
         </View>
 
-        <Pressable style={styles.nextButton} onPress={handleNext}>
+        <Pressable style={styles.nextButton} onPress={handleNext} accessibilityRole="button">
           <Text style={styles.nextButtonText}>{isLast ? 'Get Started' : 'Next'}</Text>
           <Ionicons name={isLast ? 'checkmark' : 'arrow-forward'} size={20} color={colors.textInverse} />
         </Pressable>
 
         {!isLast && (
-          <Pressable style={styles.skipButton} onPress={onComplete}>
+          <Pressable style={styles.skipButton} onPress={onComplete} accessibilityRole="button">
             <Text style={styles.skipText}>Skip</Text>
           </Pressable>
         )}

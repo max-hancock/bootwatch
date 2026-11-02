@@ -75,7 +75,7 @@ export default function LeaderboardScreen() {
             <>
               <Ionicons name="cloud-offline-outline" size={48} color={colors.danger} />
               <Text style={styles.emptyTitle}>Couldn't load the leaderboard</Text>
-              <Pressable style={styles.retryButton} onPress={() => void load()}>
+              <Pressable style={styles.retryButton} onPress={() => void load()} accessibilityRole="button">
                 <Ionicons name="refresh" size={18} color={colors.textInverse} />
                 <Text style={styles.retryText}>Retry</Text>
               </Pressable>
