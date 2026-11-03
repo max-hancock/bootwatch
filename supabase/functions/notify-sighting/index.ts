@@ -8,7 +8,9 @@
 //   SUPABASE_SERVICE_ROLE_KEY - newer projects inject sb_secret_... there.
 //   That path assumes Edge Function "Verify JWT" stays ON.
 // Optional table public.notify_sighting_dispatch dedupes webhook + app (run add script in repo).
-// Dashboard: JWT verification can be ON (user invoke) or OFF (webhook-only) — with OFF, both work.
+// Dashboard: keep "Verify JWT" ON. The service_role path above reads the token's claims
+//   without checking its signature, and relies on Supabase having verified it first.
+//   With Verify JWT OFF, anyone could forge a token that passes as service_role.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 

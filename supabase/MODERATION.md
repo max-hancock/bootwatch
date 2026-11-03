@@ -1,8 +1,11 @@
 # Reviewing reported photos
 
 Users can report a sighting photo or a profile photo from the app. When **2
-different people** report the same photo it is hidden straight away and waits
-for you here. Set up by `2026-11-02_photo_reports.sql`.
+different people whose accounts are at least a week old** report the same
+photo, it is hidden straight away and waits for you here. Reports from newer
+accounts are saved and listed below, but never hide anything on their own.
+Set up by `2026-11-02_photo_reports.sql` and
+`2026-11-02_photo_reports_hardening.sql`.
 
 Apple expects reports to be acted on promptly, so check this every few days
 (at least weekly).

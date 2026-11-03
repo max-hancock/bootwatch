@@ -27,9 +27,10 @@ already run, and aborts with a clear message if not.
 | 3 | `2026-10-06_leaderboard_and_user_stats.sql` | SQL | Points, monthly and all-time leaderboards, profile stats. Read-only functions. Use the current file: it was edited after it was first run on dev (scoring changed to 100 per report / 25 per reaction, all-time board added). |
 | 4 | `2026-10-06_one_custom_emoji_per_user.sql` | SQL | **Deletes rows**: surplus custom-emoji reactions. Expected to remove 0 on production. Prints how many it removed. |
 | 5 | `2026-10-08_reaction_notifications.sql` | SQL | Dedup table and the profile on/off switch for reaction notifications. Adds only. |
-| 6 | `notify-reaction` | Edge function | `npx supabase functions deploy notify-reaction --project-ref jrorzmwsqxynwbmuqsoq`. Leave **Verify JWT on**. Deploy after #5. |
+| 6 | `notify-reaction` | Edge function | `npx supabase functions deploy notify-reaction --project-ref jrorzmwsqxynwbmuqsoq`. Leave **Verify JWT on**. Deploy after #5. Deploy the current file: it was changed on 2026-11-02 to return the same reply whatever happens (security review). |
 | 7 | `2026-10-26_sighting_rate_limit.sql` | SQL | Posting limits. Takes effect for every app version immediately, including the current App Store build. |
 | 8 | `2026-10-26_rename_university_view_to_the_grand.sql` | SQL | **Updates one row**: the complex's name in the database, which push notifications use. Fixes notifications for the current App Store build too, so it can be run early. |
+| 9 | `2026-11-02_photo_reports_hardening.sql` | SQL | Fixes from the security review: only accounts 7+ days old count towards hiding a photo, and a hidden profile photo can't come back with a changed link. Replaces two functions; changes no rows. **Not yet run on dev either**: run `2026-11-02_photo_reports.sql` then this on dev first. |
 
 ## Check afterwards
 

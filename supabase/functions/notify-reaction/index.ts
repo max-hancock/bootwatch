@@ -60,6 +60,17 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/**
+ * Every outcome after the caller's own checks gets the same reply. Saying why
+ * nothing was sent (author opted out, has no push token, ...) would tell a
+ * reactor things about the author of an anonymous report. The reason goes to
+ * the function logs instead.
+ */
+function done(reason: string, extra: Record<string, unknown> = {}): Response {
+  console.log("[notify-reaction]", reason, extra);
+  return json({ ok: true });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -98,7 +109,7 @@ Deno.serve(async (req) => {
       .limit(1);
     if (reactionsErr) return json({ error: "Could not read reactions", detail: reactionsErr.message }, 500);
     const latest = reactions?.[0];
-    if (!latest) return json({ sent: 0, reason: "no_reaction_from_caller" });
+    if (!latest) return done("no_reaction_from_caller");
 
     const { data: authorRow } = await admin
       .from("sighting_authors")
@@ -106,8 +117,8 @@ Deno.serve(async (req) => {
       .eq("sighting_id", sightingId)
       .maybeSingle();
     const authorId: string | null = authorRow?.user_id ?? null;
-    if (!authorId) return json({ sent: 0, reason: "no_author" });
-    if (authorId === reactorId) return json({ sent: 0, reason: "own_sighting" });
+    if (!authorId) return done("no_author");
+    if (authorId === reactorId) return done("own_sighting");
 
     // Dedup: first reaction from this person on this sighting wins; later ones stop here.
     const { error: dedupErr } = await admin
@@ -115,7 +126,7 @@ Deno.serve(async (req) => {
       .insert({ sighting_id: sightingId, reactor_id: reactorId });
     if (dedupErr) {
       if (dedupErr.code === "23505" || /duplicate|unique/i.test(dedupErr.message ?? "")) {
-        return json({ sent: 0, reason: "already_notified_for_this_reactor" });
+        return done("already_notified_for_this_reactor");
       }
       // Without the dedup table we cannot guarantee "once per person", so send nothing.
       return json({ error: "Could not record notification", detail: dedupErr.message }, 500);
@@ -129,7 +140,7 @@ Deno.serve(async (req) => {
 
     const grouped = total > INDIVIDUAL_LIMIT;
     if (grouped && !GROUPED_MILESTONES.includes(total)) {
-      return json({ sent: 0, reason: "between_milestones", reactors: total });
+      return done("between_milestones", { reactors: total });
     }
 
     const { data: authorProfile } = await admin
@@ -138,7 +149,7 @@ Deno.serve(async (req) => {
       .eq("id", authorId)
       .maybeSingle();
     if (authorProfile?.reaction_alerts === false) {
-      return json({ sent: 0, reason: "author_opted_out" });
+      return done("author_opted_out");
     }
 
     const { data: tokenRow } = await admin
@@ -146,7 +157,7 @@ Deno.serve(async (req) => {
       .select("token")
       .eq("user_id", authorId)
       .maybeSingle();
-    if (!tokenRow?.token) return json({ sent: 0, reason: "author_has_no_push_token" });
+    if (!tokenRow?.token) return done("author_has_no_push_token");
 
     const [{ data: reactorProfile }, { data: sighting }] = await Promise.all([
       admin.from("profiles").select("display_name").eq("id", reactorId).maybeSingle(),
@@ -203,7 +214,7 @@ Deno.serve(async (req) => {
       console.error("[notify-reaction] Expo HTTP error", pushResponse.status, pushResult);
     }
 
-    return json({ sent: 1, grouped, reactors: total, expoHttpStatus: pushResponse.status });
+    return done("sent", { grouped, reactors: total, expoHttpStatus: pushResponse.status });
   } catch (error) {
     console.error("[notify-reaction] unexpected:", error);
     return json({ error: String(error) }, 500);
